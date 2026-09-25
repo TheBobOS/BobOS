@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# bobfetch — infos système, version BobOS (au lieu de taper « fastfetch »)
+# fastfetch reste le moteur ; c'est la commande et le logo qui changent.
+set -euo pipefail
+
+LOGO="/usr/share/bobos/bobos.ascii"
+
+if [[ -f "$LOGO" ]] && command -v fastfetch >/dev/null 2>&1; then
+    exec fastfetch --logo "$LOGO" --logo-type file "$@"
+fi
+
+# pas de logo (ou fastfetch absent) : on lance quand même ce qu'on peut
+if command -v fastfetch >/dev/null 2>&1; then
+    exec fastfetch "$@"
+fi
+echo "bobfetch : fastfetch est introuvable." >&2
+exit 127

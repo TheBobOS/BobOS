@@ -107,8 +107,9 @@ clean_profile() {
            iso/airootfs/usr/share/man/man8/calamares.8.gz \
            iso/airootfs/usr/bin/calamares
     rm -f iso/airootfs/usr/lib/libcalamares*.so*
-    # scripts retirés de BobOS (bob-fetch, bobos-install-cli)
-    rm -f iso/airootfs/usr/bin/bob-fetch iso/airootfs/usr/bin/bobos-install-cli
+    # scripts retirés de BobOS (bob-fetch, bobos-install-cli, neofetch)
+    rm -f iso/airootfs/usr/bin/bob-fetch iso/airootfs/usr/bin/bobos-install-cli \
+          iso/airootfs/usr/bin/neofetch
     # l'arbre redevient propriété de l'utilisateur (git clean, checkout…)
     chown -R "$BUILD_USER" iso/ 2>/dev/null || true
 }

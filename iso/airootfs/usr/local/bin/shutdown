@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# shutdown — éteint le PC en disant au revoir à la voix
+#
+# ATTENTION : ce script est dans /usr/local/bin, donc il passe AVANT le
+# /usr/bin/shutdown de systemd. Les options habituelles (« -h now », « -r »)
+# sont transmises telles quelles à systemctl pour qu'aucun script existant ne
+# casse ; « -r/-c/… » n'appellent donc pas la voix, une simple extinction si.
+set -euo pipefail
+
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB" || true
+
+speak() {
+    local phrase="$1"
+    if command -v bob-say >/dev/null 2>&1; then
+        bob-say "$phrase" || true
+    elif command -v espeak-ng >/dev/null 2>&1; then
+        espeak-ng -v fr -s 170 "$phrase" 2>/dev/null || true
+    fi
+}
+
+case "${1:-}" in
+    ""|now|-h|--halt|-P|--poweroff|poweroff)
+        speak "À plus dans l'bus"
+        # laisse le TTS terminer sa phrase avant de couper le courant
+        sleep 1.5
+        ;;
+esac
+
+# systemctl poweroff passe par polkit : autorisé pour le wheel
+# (AUTH_ADMIN sur le système installé → l'agent graphique peut demander le
+# mot de passe ; en TTY sans agent, doas system poweroff est le repli).
+if ! systemctl poweroff "$@"; then
+    if command -v doas >/dev/null 2>&1; then
+        exec doas systemctl poweroff "$@"
+    fi
+    exit 1
+fi

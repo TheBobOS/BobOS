@@ -29,7 +29,8 @@ choice="$(printf '%s\n' \
     "$FW_STATE" \
     "$KILLER_STATE" \
     "Mises à jour — bob-update" \
-    "Infos système — fastfetch" \
+    "Infos système — bobfetch" \
+    "Snake — jouer" \
     "Énergie — éteindre / redémarrer / veille" | \
     wofi --dmenu --prompt "Paramètres BobOS")" || exit 0
 
@@ -78,7 +79,10 @@ case "$choice" in
         kitty -e bob-update
         ;;
     Infos*)
-        kitty -e fastfetch
+        kitty -e bobfetch
+        ;;
+    Snake*)
+        kitty --title 'Snake BobOS' -e bob-snake
         ;;
     Énergie*)
         bobos-power

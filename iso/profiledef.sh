@@ -37,10 +37,15 @@ file_permissions=(
 
   # bibliothèque commune des scripts BobOS
   ['/usr/local/lib/bobos/common.sh']='0:0:0644'
+  # logo de bobfetch (affiché par fastfetch)
+  ['/usr/share/bobos/bobos.ascii']='0:0:0644'
 
   # scripts système
   ['/usr/local/bin/bobos-create-user']='0:0:0755'
   ['/usr/local/bin/bobos-shot']='0:0:0755'
+  ['/usr/local/bin/bobfetch']='0:0:0755'
+  ['/usr/local/bin/bob-snake']='0:0:0755'
+  ['/usr/local/bin/shutdown']='0:0:0755'
   ['/usr/bin/bob']='0:0:0755'
   ['/usr/bin/bob-update']='0:0:0755'
   ['/usr/bin/bob-fixme']='0:0:0755'
@@ -60,5 +65,4 @@ file_permissions=(
   ['/usr/bin/bobos-screen']='0:0:0755'
   ['/usr/bin/bobos-power']='0:0:0755'
   ['/usr/bin/bobos-settings']='0:0:0755'
-  ['/usr/bin/neofetch']='0:0:0755'
 )

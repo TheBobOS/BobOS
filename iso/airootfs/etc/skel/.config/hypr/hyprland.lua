@@ -25,6 +25,9 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &")
     -- écran : résolution + Hz max auto (VM → 1080p, cf. bobos-screen)
     hl.exec_cmd("bobos-screen &")
+    -- jeu d'accueil : Snake dans sa fenêtre au démarrage du bureau.
+    -- « pgrep » évite d'ouvrir 50 serpents si la session est relancée.
+    hl.exec_cmd("pgrep -x bob-snake >/dev/null || kitty --title 'Snake BobOS' -e bob-snake &")
 end)
 
 -- Réglages écran persos choisis dans Paramètres → Écran (bobos-res écrit
@@ -122,6 +125,8 @@ hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("code"))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("wofi --show drun"))
 hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("bobos-settings"))
 hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd("bobos-power"))
+hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("kitty --title 'Snake BobOS' -e bob-snake &"))
+hl.bind(mainMod .. " + SHIFT + I", hl.dsp.exec_cmd("kitty -e bobfetch &"))
 hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("bobos-power --logout"))
 hl.bind(mainMod .. " + Q", hl.dsp.window.close())
 hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }))

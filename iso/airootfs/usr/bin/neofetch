@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# neofetch — retiré des dépôts Arch (projet archivé) → fastfetch le remplace.
-exec fastfetch "$@"

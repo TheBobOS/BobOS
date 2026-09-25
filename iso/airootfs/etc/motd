@@ -2,6 +2,9 @@ Bienvenue sur BobOS — l'OS de l'espace.
 
 Commandes utiles :
   bob             wrapper pacman (bob -S crepes-galactiques)
+  bobfetch        infos système (logo BobOS)
+  bob-snake       le jeu (il s'ouvre tout seul au démarrage du bureau)
+  shutdown        éteint le PC en disant « À plus dans l'bus »
   bob-update      mise à jour (news, trousseau, interactive)
   bob fixme       retour arrière depuis le cache pacman
   bob dotfiles apply   réapplique /etc/skel (avec sauvegarde)
@@ -12,7 +15,9 @@ Commandes utiles :
   bobos-power     éteindre / redémarrer / veille
   bob-say         TTS BobOS
 
-Raccourcis : SUPER+L verrouiller · SUPER+SHIFT+S capture · SUPER+D menu
+Raccourcis : SUPER+L verrouiller · SUPER+SHIFT+S Snake · SUPER+SHIFT+I bobfetch
+             SUPER+D menu · SUPER+SHIFT+P menu énergie
+
 Tout est dans /etc/skel (dotfiles) et les scripts /usr/bin/bob*.
 
 KEKW

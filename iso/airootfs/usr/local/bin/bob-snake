@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# bob-snake — mini Snake pour les gens qui s'ennuient au boot
+# Touches : flèches (et WASD/ZQSD) pour bouger · p = pause · q = quitter
+# Le jeu tourne dans un terminal (kitty) : il lit le clavier en mode raw.
+set -uo pipefail
+
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+if [[ -r "$BOBOS_LIB" ]]; then
+    # shellcheck source=/dev/null
+    source "$BOBOS_LIB"
+else
+    # repli minimal : le jeu doit tourner même sans la bibliothèque
+    read_int() {
+        local v="${2:-0}" raw
+        [[ -r "$1" ]] && raw="$(tr -cd '0-9' < "$1" 2>/dev/null | cut -c1-18)"
+        [[ -n "${raw:-}" ]] && v="$raw"
+        [[ "$v" =~ ^[0-9]{1,18}$ ]] || v=0
+        printf '%s\n' "$v"
+    }
+fi
+
+W=28   # largeur du terrain
+H=18   # hauteur
+STEP_MS=${BOB_SNAKE_SPEED:-180}
+
+# --- terminal --------------------------------------------------------------
+[[ -t 0 && -t 1 ]] || { echo "bob-snake : à lancer dans un terminal (kitty -e bob-snake)"; exit 1; }
+hide() { printf '\033[?25l'; }
+show() { printf '\033[?25h'; }
+cleanup() { stty sane 2>/dev/null || true; show; printf '\033[2J\033[H'; }
+trap cleanup EXIT INT TERM
+stty raw -echo 2>/dev/null || true
+hide
+
+# --- terrain ---------------------------------------------------------------
+# '#' serpent, 'O' pomme, ' ' vide ; bordure gérée à l'affichage
+declare -a field
+init_field() {
+    for ((y = 0; y < H; y++)); do
+        field[y]="$(printf '%*s' "$W" '')"
+    done
+}
+init_field
+snake_x=$(( W / 2 )); snake_y=$(( H / 2 ))
+# le serpent est horizontal, tête à gauche
+body=()
+for i in 0 1 2 3; do body+=( "$(( snake_x - i )):$snake_y" ); done
+dir=1            # 1 droite, -1 gauche, 2 bas, -2 haut
+score=0
+best=0
+[[ -f ~/.local/state/bobos/snake-best ]] && best="$(read_int ~/.local/state/bobos/snake-best 0)"
+paused=0
+game_over=0
+
+new_apple() {
+    while :; do
+        ax=$(( RANDOM % W )); ay=$(( RANDOM % H ))
+        for cell in "${body[@]}"; do
+            [[ "$cell" == "$ax:$ay" ]] && continue 2
+        done
+        apple="$ax:$ay"
+        return
+    done
+}
+new_apple
+
+put() {  # put <x> <y> <char>
+    local x=$1 y=$2 c=$3
+    [[ $x -lt 0 || $x -ge $W || $y -lt 0 || $y -ge $H ]] && return 1
+    local row="${field[y]}"
+    printf -v row '%.*s%s%s' "$x" "$row" "$c" "${row:$(( x + 1 ))}"
+    field[y]="$row"
+    return 0
+}
+
+draw() {
+    local out="" y
+    printf '\033[H'
+    out+="  🐍 BOB-SNAKE — score : $score   record : $best"$'\n'
+    out+="  flèches/WASD : bouger · p : pause · q : quitter"$'\n\n'
+    for ((y = 0; y < H; y++)); do
+        out+="  |${field[y]}|"$'\n'
+    done
+    if (( paused )); then
+        out+=$'\n'"  ⏸  PAUSE — p pour reprendre"$'\n'
+    fi
+    if (( game_over )); then
+        out+=$'\n'"  💀 PERDU ! score : $score — q pour quitter, r pour rejouer"$'\n'
+    fi
+    printf '%s' "$out"
+}
+
+step() {
+    local hx hy
+    IFS=: read -r hx hy <<<"${body[0]}"
+    local nx=$(( hx + (dir == 1 ? 1 : dir == -1 ? -1 : 0) ))
+    local ny=$(( hy + (dir == 2 ? 1 : dir == -2 ? -1 : 0) ))
+
+    # murs = mort
+    if (( nx < 0 || nx >= W || ny < 0 || ny >= H )); then
+        game_over=1
+        return
+    fi
+    # se mordre = mort (la queue se retire, donc on teste tout sauf le dernier)
+    local i last=$((${#body[@]} - 1))
+    for ((i = 0; i < last; i++)); do
+        if [[ "${body[i]}" == "$nx:$ny" ]]; then
+            game_over=1
+            return
+        fi
+    done
+
+    body=("$nx:$ny" "${body[@]}")
+    if (( nx == ${apple%:*} && ny == ${apple#*:} )); then
+        score=$(( score + 10 ))
+        (( score > best )) && best=$score
+        new_apple
+        # accélération douce
+        (( STEP_MS > 70 )) && STEP_MS=$(( STEP_MS - 4 ))
+    else
+        # on retire la queue : elle est au dernier index
+        unset 'body[-1]'
+        body=("${body[@]}")
+    fi
+}
+
+render() {
+    init_field
+    put "$(( ${apple%:*} ))" "$(( ${apple#*:} ))" 'O' || true
+    local i
+    for ((i = 0; i < ${#body[@]}; i++)); do
+        put "${body[i]%:*}" "${body[i]#*:}" "$( (( i == 0 )) && echo '@' || echo '#' )" || true
+    done
+    draw
+}
+
+reset() {
+    body=()
+    snake_x=$(( W / 2 )); snake_y=$(( H / 2 ))
+    for i in 0 1 2 3; do body+=( "$(( snake_x - i )):$snake_y" ); done
+    dir=1; score=0; game_over=0; paused=0
+    new_apple
+}
+
+save_best() {
+    # NB : deux lignes, pas « local d=… f="$d/…" » — sur une seule ligne le
+    # shell n'a pas encore affecté d, et f restait vide (écriture à /).
+    local d="$HOME/.local/state/bobos"
+    local f="$d/snake-best"
+    [[ -d "$d" ]] || mkdir -p "$d" 2>/dev/null || return 0
+    printf '%s\n' "$best" > "$f" 2>/dev/null || true
+}
+
+# --- boucle ----------------------------------------------------------------
+# Lecture non bloquante des touches : on garde le dernier caractère lu.
+render
+while :; do
+    # une touche si elle est disponible (0,1 s)
+    if read -r -n1 -s -t 0.1 key 2>/dev/null; then
+        case "$key" in
+            $'\033')   # séquence flèche : on lit le reste
+                read -r -n2 -s -t 0.05 rest 2>/dev/null || true
+                case "$rest" in
+                    '[A') dir=-2 ;;   # haut
+                    '[B') dir=2  ;;   # bas
+                    '[C') dir=1  ;;   # droite
+                    '[D') dir=-1 ;;   # gauche
+                esac
+                ;;
+            q|Q) break ;;
+            p|P) (( paused )) && paused=0 || paused=1 ;;
+            r|R) (( game_over )) && reset ;;
+            w|W|k) dir=-2 ;;
+            s|S|j) dir=2  ;;
+            a|A|h) dir=-1 ;;
+            d|D|l) dir=1  ;;
+        esac
+    fi
+    (( paused || game_over )) && continue
+    step
+    (( game_over )) && save_best
+    render
+    # temporisation sans passer par awk à chaque image
+    printf -v delay '%d.%03d' $(( STEP_MS / 1000 )) $(( STEP_MS % 1000 ))
+    sleep "$delay"
+done
+
+save_best

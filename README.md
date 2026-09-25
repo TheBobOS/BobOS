@@ -16,7 +16,12 @@ cuit dans l'image : aucune installation réseau nécessaire.
   verrouillage automatique (hypridle/hyprlock), `bob-setup` (versions de la
   stack dev), sélecteur de résolution manuel dans Paramètres → Écran
 - **Apps préinstallées** : Firefox, Steam, VS Code, Discord, OBS, mpv, Okular,
-  Kate, Thunar, htop, cmatrix, neofetch (wrapper fastfetch)
+  Kate, Thunar, htop, cmatrix, `bobfetch` (infos système, logo BobOS)
+- **Snake au démarrage** : un `bob-snake` s'ouvre dans son terminal quand le
+  bureau arrive (`SUPER+SHIFT+S` pour rejouer, `SUPER+SHIFT+I` pour
+  `bobfetch`)
+- **Commandes** : `bobfetch`, `bob-snake`, `bobfire…`, `shutdown` (éteint en
+  disant « À plus dans l'bus »), `bob-*` pour le reste
 - **Stack dev** : Python, pip, Node.js, Bun, Docker (+ compose)
 - **Bureau complet** : notifications (mako), captures (grim/slurp), volume
   (pavucontrol), Bluetooth, veille/hibernation, Nerd Font + emoji, portail
@@ -84,6 +89,18 @@ qemu-system-x86_64 -m 8192 -smp 4 -enable-kvm \
 ```
 
 Disque à ≥ **20 Go** pour l'installation (racine ~8,7 Go décompressée).
+
+### « This kernel requires an x86-64 CPU, but only detected an i686 CPU »
+
+Ce message **ne vient pas de BobOS** : c'est le noyau 64 bits qui refuse de
+démarrer parce que le processeur qu'il voit est un **i686**. Dans la quasi
+totalité des cas, le problème est la machine virtuelle, pas le PC :
+
+| Où | Quoi faire |
+|---|---|
+| **VirtualBox** | La VM a été créée en 32 bits. *Configuration → Général → Type* = **Linux**, *Version* = **Other/Unknown (64-bit)**. Si la liste ne propose que du 32 bits, il faut activer la virtualisation matérielle (VT-x/AMD-V) dans le BIOS du PC **et** cocher *Système → Accélération → Nested Paging + VT-x/AMD-V*. Recréer la VM marche aussi (c'est le plus simple). |
+| **QEMU/KVM** | `-cpu host` ou `-cpu qemu64` (un `-cpu i686`/`pentium3` force le 32 bits). |
+| **PC réel (Lenovo…)** | L'ISO démarre sur **tout** x86-64. Si ça échoue quand même : désactivez *CSM / Legacy Boot* dans le BIOS et rebootez en UEFI, ou à l'inverse expressez le disque en **GPT + UEFI**. |
 
 ## Dépôt bob-core
 

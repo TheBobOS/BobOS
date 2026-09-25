@@ -34,10 +34,12 @@ iso/airootfs/usr/share/icons/hicolor/scalable/apps/calamares.svg
 iso/airootfs/usr/share/applications/calamares.desktop
 iso/airootfs/usr/bin/calamares
 
-# Scripts retirés de BobOS (bob-fetch, installateur CLI) : build.sh les
-# supprime de l'image, ils ne font plus partie du système.
+# Scripts retirés de BobOS (bob-fetch, installateur CLI, ancien wrapper
+# neofetch remplacé par bobfetch) : build.sh les supprime de l'image, ils ne
+# font plus partie du système.
 iso/airootfs/usr/bin/bob-fetch
 iso/airootfs/usr/bin/bobos-install-cli
+iso/airootfs/usr/bin/neofetch
 
 # Éditeurs / OS
 *.swp
