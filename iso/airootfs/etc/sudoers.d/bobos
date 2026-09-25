@@ -1,3 +1,6 @@
-# BobOS — sudo sans mot de passe (comme doas) : aucune boucle possible
-Defaults !lecture_never
-wheel ALL=(ALL:ALL) NOPASSWD: ALL
+# BobOS — sudo, filet de sécurité si doas est absent.
+# Sur le LIVE : pas de mot de passe (comme doas, session de démo éphémère).
+# Sur le système INSTALLÉ, bobos-target-fixes REMPLACE ce fichier par la
+# version à mot de passe (voir audit SEC-01).
+Defaults lecture=never
+%wheel ALL=(ALL:ALL) NOPASSWD: ALL

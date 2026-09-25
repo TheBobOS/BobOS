@@ -1,53 +1,73 @@
 #!/usr/bin/env bash
-# bob-fixme — rollback de la dernière mise à jour (panic button)
+# bob-fixme — bouton panique : revient à la version précédente des paquets
+# touchés par la dernière transaction pacman, en réinstallant les vieux
+# paquets encore présents dans /var/cache/pacman/pkg.
+#
+# L'ancien script snapper ne démarrait jamais (pas de snapper, racine ext4) et
+# sa branche de secours n'installait rien : elle affichait « fait. » (audit
+# BOB-03). Ici c'est un vrai rollback.
 set -euo pipefail
 
-LAST_UPDATE="/var/lib/bobos/last-update"
-CACHE="/var/cache/bob"
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB"
 
-echo "  ____  _____ _____ _   _  ____ ____  "
-echo " |  _ \|  ___|_   _| | | |/ ___|  _ \ "
-echo " | | | | |_    | | | | | | |   | |_) |"
-echo " | |_| |  _|   | | | |_| | |___|  _ < "
-echo " |____/|_|     |_|  \___/ \____|_| \_\\"
+cat <<'ASCII'
+  ____  _____ _____ _   _  ____ ____
+ |  _ \|  ___|_   _| | | |/ ___|  _ \
+ | | | | |_    | | | | | | |   | |_) |
+ | |_| |  _|   | | | |_| | |___|  _ <
+ |____/|_|     |_|  \___/ \____|_| \_\
+ASCII
 echo
 
-if [[ $EUID -ne 0 ]]; then
-    if command -v doas &>/dev/null; then
-        exec doas "$0" "$@"
-    else
-        exec sudo -E "$0" "$@"
-    fi
-fi
+require_root "$@"
 
-if [[ ! -f "$LAST_UPDATE" ]]; then
-    echo "[bob-fixme] aucune update enregistrée — rien à rollback." >&2
+PACMAN_LOG="${BOBOS_PACMAN_LOG:-/var/log/pacman.log}"
+CACHE="${BOBOS_PACMAN_CACHE:-/var/cache/pacman/pkg}"
+
+if [[ ! -r "$CACHE" ]]; then
+    log_err "cache pacman absent ($CACHE) : rien à restaurer"
     exit 1
 fi
 
-echo "[bob-fixme] dernière update : $(cat "$LAST_UPDATE")"
+# Dernière transaction ALPM dans le journal
+start="$(grep -n '\[ALPM\] transaction started' "$PACMAN_LOG" 2>/dev/null | tail -1 | cut -d: -f1 || true)"
+if [[ -z "${start:-}" ]]; then
+    log_err "aucune transaction ALPM dans $PACMAN_LOG : rien à restaurer"
+    exit 1
+fi
+log "dernière transaction pacman : ligne $start"
 
-# 1) tentative de rollback btrfs (si snapshots dispo)
-if command -v snapper &>/dev/null; then
-    echo "[bob-fixme] tentative de rollback snapper..."
-    LAST_SNAP=$(snapper --csvout list single | tail -n +2 | cut -d',' -f1 | tail -1 || true)
-    if [[ -n "$LAST_SNAP" ]]; then
-        snapper rollback "$LAST_SNAP" && {
-            echo "[bob-fixme] rollback snapshot $LAST_SNAP fait. Redémarre."
-            exit 0
-        }
-    fi
+# "upgraded <nom> (<ancienne> -> <nouvelle>)" → on récupère nom + ancienne version
+mapfile -t candidates < <(
+    tail -n "+$start" "$PACMAN_LOG" \
+        | sed -nE 's/.*\[ALPM\] upgraded ([^ ]+) \(([^ ]+) -> [^)]+\).*/\1 \2/p' \
+        | sort -u \
+        | while read -r name old; do
+            # le fichier du cache : nom-version-anything.pkg.tar.zst
+            ls "$CACHE/$name-$old"-*.pkg.tar.zst 2>/dev/null | head -n1
+        done
+)
+
+if (( ${#candidates[@]} == 0 )); then
+    log_err "aucun paquet de la dernière update n'est encore dans le cache"
+    log "bob fixme ne peut PAS inventer un paquet absent (snapshots Btrfs :"
+    log "ce serait le rôle de snapper + snap-pac, pas encore configurés)"
+    exit 1
 fi
 
-# 2) fallback : rétrograde les paquets qui ont été touchés (best effort)
-echo "[bob-fixme] pas de snapshot — downgrade best effort via le cache pacman..."
-if [[ -d /var/cache/pacman/pkg ]]; then
-    # installe les versions précédentes les plus récentes du cache pour les paquets mis à jour récemment
-    mapfile -t recent < <(grep -E 'upgraded|installed' /var/log/pacman.log 2>/dev/null | tail -50 | grep -oP '\[\K[^\] ]+' | sort -u || true)
-    if ((${#recent[@]})); then
-        echo "[bob-fixme] paquets récents : ${recent[*]}"
-    fi
+echo
+log "paquets qui peuvent être remis à leur version précédente :"
+printf '  • %s\n' "${candidates[@]##*/}"
+echo
+read -rp "Restaurer ces versions ? [o/N] " ok
+if [[ "${ok:-}" != [oO] ]]; then
+    log "annulé"
+    exit 0
 fi
 
-echo "[bob-fixme] rollback partiel. En cas de doute : bob -Syu"
-echo "[bob-fixme] fait."
+pacman -U "${candidates[@]}" && log "rollback effectué. Redémarre si un service te le demande." || {
+    log_err "le rollback a échoué (paquets manquants ? conflit ?)"
+    exit 1
+}

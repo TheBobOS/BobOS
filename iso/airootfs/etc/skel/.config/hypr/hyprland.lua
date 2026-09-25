@@ -20,6 +20,8 @@ hl.monitor({
 hl.on("hyprland.start", function()
     hl.exec_cmd("waybar &")
     hl.exec_cmd("nm-applet &")
+    hl.exec_cmd("mako --icon-size 22 &")           -- notifications
+    hl.exec_cmd("hypridle &")                      -- extinction / verrouillage
     hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &")
     -- écran : résolution + Hz max auto (VM → 1080p, cf. bobos-screen)
     hl.exec_cmd("bobos-screen &")
@@ -38,6 +40,9 @@ end
 
 hl.env("XCURSOR_SIZE", "24")
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
+
+-- Portefeuille / presse-papiers avec historique (cliphist)
+hl.env("WAYLAND_DISPLAY", os.getenv("WAYLAND_DISPLAY") or "wayland-1")
 
 ----------------------------
 ---- ASPECT / DÉCORATION ----
@@ -87,6 +92,10 @@ hl.config({
     },
 })
 
+-- Clavier choisi pendant l'installation (bobos-target-fixes écrit ce fichier
+-- seulement si l'utilisateur en a choisi un autre que fr).
+pcall(require, "keyboard")
+
 ----------------------------
 ---- ANIMATIONS -------------
 ----------------------------
@@ -105,19 +114,30 @@ hl.animation({ leaf = "workspaces", enabled = true, speed = 4, bezier = "default
 
 local mainMod = "SUPER"
 
+-- Applications
 hl.bind(mainMod .. " + Return", hl.dsp.exec_cmd("kitty"))
-hl.bind(mainMod .. " + Q", hl.dsp.window.close())
-hl.bind(mainMod .. " + M", hl.dsp.exit())
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd("yazi"))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd("kitty -e yazi"))   -- yazi est un TUI : il lui FAUT un terminal
 hl.bind(mainMod .. " + B", hl.dsp.exec_cmd("firefox"))
 hl.bind(mainMod .. " + V", hl.dsp.exec_cmd("code"))
-hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + D", hl.dsp.exec_cmd("wofi --show drun"))
 hl.bind(mainMod .. " + I", hl.dsp.exec_cmd("bobos-settings"))
 hl.bind(mainMod .. " + SHIFT + P", hl.dsp.exec_cmd("bobos-power"))
+hl.bind(mainMod .. " + M", hl.dsp.exec_cmd("bobos-power --logout"))
+hl.bind(mainMod .. " + Q", hl.dsp.window.close())
+hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
 
+-- Sécurité / session (« & » indispensable : hyprlock ne rend pas la main)
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("hyprlock &"))
+hl.bind("XF86ScreenSaver", hl.dsp.exec_cmd("hyprlock &"), { locked = true })
+
+-- Captures d'écran
+hl.bind(mainMod .. " + SHIFT + S", hl.dsp.exec_cmd("bobos-shot region"))
+hl.bind(mainMod .. " + SHIFT + W", hl.dsp.exec_cmd("bobos-shot window"))
+hl.bind(mainMod .. " + SHIFT + F", hl.dsp.exec_cmd("bobos-shot full"))
+
+-- Navigation
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
@@ -133,3 +153,16 @@ hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
 
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+
+-- Touches média (fonctionnelles sans bureau : wpctl / playerctl étaient
+-- installés mais aucune touche n'était liée, audit UX-06)
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { repeating = true })
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),      { repeating = true })
+hl.bind("XF86AudioMute",        hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"))
+hl.bind("XF86AudioMicMute",     hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"))
+hl.bind("XF86AudioNext",        hl.dsp.exec_cmd("playerctl next"))
+hl.bind("XF86AudioPrev",        hl.dsp.exec_cmd("playerctl previous"))
+hl.bind("XF86AudioPlay",        hl.dsp.exec_cmd("playerctl play-pause"))
+hl.bind("XF86AudioPause",       hl.dsp.exec_cmd("playerctl play-pause"))
+hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("brightnessctl set 5%+"), { repeating = true })
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("brightnessctl set 5%-"), { repeating = true })

@@ -1,42 +1,59 @@
 #!/usr/bin/env bash
 # bob-firewall — wrapper nftables martien
+# Profils : public (strict, défaut) | maison (+ découverte LAN)
+# On ne manipule QUE la table « inet bobos » : le NAT de Docker / libvirt
+# n'est jamais touché (l'ancien « nft flush ruleset » les cassait, audit NET-02).
 set -euo pipefail
 
-RULES="/etc/bobos/firewall.nft"
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB"
+
+RULES_DIR=/etc/bobos
+PROFILE_FILE="$RULES_DIR/.profile"   # profil mémorisé entre deux redémarrages
 
 usage() {
     echo "bob-firewall — pare-feu martien BobOS"
-    echo "usage : bob-firewall on|off|status|reload"
+    echo "usage : bob-firewall on [public|maison] | off | status | reload"
 }
 
-if [[ $EUID -ne 0 ]]; then
-    if command -v doas &>/dev/null; then
-        exec doas "$0" "$@"
-    else
-        exec sudo -E "$0" "$@"
-    fi
-fi
+require_root "$@"
+
+load_profile() {
+    local profile="${1:-public}"
+    local rules
+    case "$profile" in
+        public) rules="$RULES_DIR/firewall.nft" ;;
+        maison) rules="$RULES_DIR/firewall-lan.nft" ;;
+        *) log_err "profil inconnu : $profile (public|maison)"; return 1 ;;
+    esac
+    [[ -f "$rules" ]] || { log_err "règles introuvables : $rules"; return 1; }
+    nft -f "$rules" || { log_err "nft a refusé $rules"; return 1; }
+    # le profil devient celui chargé par nftables.service au prochain boot
+    ln -sfn "$(basename "$rules")" "$RULES_DIR/firewall-active.nft"
+    printf '%s\n' "$profile" > "$PROFILE_FILE"
+    log "pare-feu ON — profil $profile"
+}
 
 case "${1:-}" in
     on|start)
-        if [[ ! -f "$RULES" ]]; then
-            echo "[bob-firewall] règles introuvables : $RULES" >&2
-            exit 1
-        fi
-        nft -f "$RULES"
-        echo "[bob-firewall] ON 🔥 — input drop sauf SSH + établi"
+        load_profile "${2:-$(cat "$PROFILE_FILE" 2>/dev/null || echo public)}"
         ;;
     off|stop)
-        nft flush ruleset
-        echo "[bob-firewall] OFF — tout est ouvert (KEKW)"
+        # on supprime NOTRE table seulement, pas le ruleset entier
+        nft delete table inet bobos 2>/dev/null || true
+        rm -f "$PROFILE_FILE"
+        log "pare-feu OFF — tout est ouvert (KEKW)"
         ;;
     status)
-        nft list ruleset
+        nft list table inet bobos 2>/dev/null \
+            || log "la table inet bobos n'existe pas (pare-feu désactivé ?)"
         ;;
     reload)
-        nft flush ruleset
-        nft -f "$RULES"
-        echo "[bob-firewall] rechargé."
+        load_profile "${2:-$(cat "$PROFILE_FILE" 2>/dev/null || echo public)}"
+        ;;
+    -h|--help|help)
+        usage
         ;;
     *)
         usage

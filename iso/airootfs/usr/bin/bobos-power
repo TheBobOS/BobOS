@@ -1,13 +1,36 @@
 #!/usr/bin/env bash
 # bobos-power — menu énergie (wofi)
+# Pas de doas ici : polkit est déjà autorisé pour power-off/reboot
+# (bobos-target-fixes durcit cette règle avec AUTH_ADMIN = mot de passe demandé).
 set -euo pipefail
 
-choice="$(printf '%s\n' "Éteindre" "Redémarrer" "Déconnexion" | \
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB"
+
+choice="$(printf '%s\n' \
+    "Éteindre" \
+    "Redémarrer" \
+    "Mettre en veille" \
+    "Hiberner" \
+    "Verrouiller" \
+    "Se déconnecter (retour à l'écran de connexion)" | \
     wofi --dmenu --prompt "Énergie")" || exit 0
 
 case "$choice" in
-    Éteindre)    doas systemctl poweroff ;;
-    Redémarrer)  doas systemctl reboot ;;
-    Déconnexion) hyprctl dispatch exit ;;
+    Éteindre)    systemctl poweroff ;;
+    Redémarrer)  systemctl reboot ;;
+    *veille*)    systemctl suspend ;;
+    Hiberner)    systemctl hibernate ;;
+    Verrouiller) hyprlock & ;;
+    *déconnecter*)
+        # pas de confirmation « tu perds ton travail » implicite : on prévient
+        if command -v notify-send &>/dev/null; then
+            notify-send -u critical "BobOS" "Déconnexion dans 5 secondes…"
+        fi
+        sleep 5
+        # hyprctl dispatch exit : le retour se fait vers le getty (tty1)
+        hyprctl dispatch exit || log_err "déconnexion refusée par Hyprland"
+        ;;
 esac
 exit 0

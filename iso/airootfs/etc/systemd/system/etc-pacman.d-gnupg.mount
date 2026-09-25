@@ -1,0 +1,8 @@
+[Unit]
+Description=BobOS — trousseau pacman temporaire (tmpfs, vidé à l'extinction)
+
+[Mount]
+What=tmpfs
+Where=/etc/pacman.d/gnupg
+Type=tmpfs
+Options=mode=0755,noswap

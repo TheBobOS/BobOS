@@ -2,13 +2,17 @@ Bienvenue sur BobOS — l'OS de l'espace.
 
 Commandes utiles :
   bob             wrapper pacman (bob -S crepes-galactiques)
-  bob-update      mise à jour BobOS
-  bob-fetch       télécharge le repo bob-core
-  bob fixme       rollback de la dernière update (panic button)
-  bob dotfiles apply
+  bob-update      mise à jour (news, trousseau, interactive)
+  bob fixme       retour arrière depuis le cache pacman
+  bob dotfiles apply   réapplique /etc/skel (avec sauvegarde)
   bob-setup       wizard du premier boot
   bobcoin         solde BobCoin
-  bob-firewall    pare-feu martien
+  bob-firewall    pare-feu martien (on|maison|off)
+  bobos-settings  paramètres (écran, son, bluetooth, énergie…)
+  bobos-power     éteindre / redémarrer / veille
   bob-say         TTS BobOS
+
+Raccourcis : SUPER+L verrouiller · SUPER+SHIFT+S capture · SUPER+D menu
+Tout est dans /etc/skel (dotfiles) et les scripts /usr/bin/bob*.
 
 KEKW

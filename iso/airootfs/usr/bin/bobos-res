@@ -44,7 +44,8 @@ tmp="$USER_CONF.tmp"
 if [ -s "$USER_CONF" ]; then
     grep -vF "output = \"$mon\"" "$USER_CONF" > "$tmp" || true
 else
-    printf '%s\n' '# BobOS — réglages écran persos (généré par bobos-res)' > "$tmp"
+    # commentaire LUA : c'est « -- », pas « # » (BOB-14)
+    printf '%s\n' '-- BobOS — réglages écran persos (généré par bobos-res)' > "$tmp"
 fi
 printf 'hl.monitor({ output = "%s", mode = "%s", position = "auto", scale = 1 })\n' "$mon" "$mode" >> "$tmp"
 mv "$tmp" "$USER_CONF"

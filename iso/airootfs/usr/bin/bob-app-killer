@@ -1,31 +1,57 @@
 #!/usr/bin/env bash
-# bob-app-killer — ferme Steam/Discord/Spotify/OBS/FF si pas de minage dans l'heure
+# bob-app-killer — ferme Steam/Discord/Spotify/OBS/Firefox si pas de minage
+# depuis une heure. Lancement par l'unité UTILISATEUR bob-app-killer.timer,
+# activée voluntarily depuis Paramètres (audit BOB-02 : plus de service
+# système lié à un nom d'utilisateur, plus de surprises toutes les heures).
 set -euo pipefail
 
-MINE_FILE="/var/lib/bobcoin/last-mine"
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB" || {
+    log_err "bibliothèque BobOS introuvable : $BOBOS_LIB"
+    exit 1
+}
+
+MINE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/bobcoin/last-mine"
+MAX_AGE=3600          # 1 h sans miner une app = purge
+GRACE=300             # 5 min de préavis avant de vraiment fermer
 APPS=(steam Steam discord Discord spotify Spotify obs OBS firefox Firefox)
 
-# timestamp du dernier minage (0 si jamais)
-last_mine="$(cat "$MINE_FILE" 2>/dev/null || echo 0)"
-now="$(date +%s)"
-age=$((now - last_mine))
+#read_int : le fichier peut contenir n'importe quoi (contenu validé, jamais
+# évalué par le shell — audit SEC-03)
+last_mine="$(read_int "$MINE_FILE" 0)"
+now="$(now_epoch)"
+age=$(( now - last_mine ))
 
-if (( age < 3600 )); then
-    echo "[bob-app-killer] minage récent (${age}s) — rien à tuer."
+if (( age < MAX_AGE )); then
+    log "minage récent (${age}s) — rien à tuer."
     exit 0
 fi
 
-echo "[bob-app-killer] pas de minage depuis ${age}s — purge."
-killed=0
+# apps réellement ouvertes ?
+open=()
+for app in "${APPS[@]}"; do
+    pgrep -x "$app" &>/dev/null && open+=("$app")
+done
+
+if (( ${#open[@]} == 0 )); then
+    log "pas de minage depuis ${age}s, mais aucune app ouverte. La garde martienne est vigilant·e."
+    exit 0
+fi
+
+# préavis (si un démon de notifications est là) puis fermeture
+if command -v notify-send &>/dev/null && (( GRACE > 0 )); then
+    notify-send -u critical -t "$(( GRACE * 1000 ))" "Garde martienne" \
+        "Pas de minage depuis $(( age / 60 )) min. Je ferme ${#open[@]} app(s) dans 5 min. Lance « bobcoin mine » pour éviter ça." || true
+    sleep "$GRACE"
+fi
+
+# le temps presse : on ne ferme plus que ce qui existe encore
 for app in "${APPS[@]}"; do
     if pgrep -x "$app" &>/dev/null; then
-        pkill -x "$app" && echo "[bob-app-killer] fermé : $app"
-        killed=1
+        pkill -x "$app" && log "fermée : $app"
     fi
 done
 
-if (( killed == 0 )); then
-    echo "[bob-app-killer] aucune app à fermer. La garde martienne est vigilant.e."
-fi
-
+log "purge terminée (${#open[@]} app(s) visée(s))."
 exit 0

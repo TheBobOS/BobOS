@@ -1,10 +1,25 @@
-// BobOS — wheel peut éteindre / gérer le réseau sans mot de passe
-polkit.addRule(function(action, subject) {
-    if (subject.isInGroup("wheel")) {
-        if (action.id.indexOf("org.freedesktop.login1.") === 0 ||
-            action.id.indexOf("org.freedesktop.NetworkManager.") === 0) {
-            return polkit.Result.YES;
-        }
+// BobOS — LIVE : root sans mot de passe est assumé (session jetable).
+// Liste blanche d'actions seulement (audit SEC-10) : on n'accorde pas
+// login1.* / NetworkManager.* en bloc.
+// Sur le système INSTALLÉ, bobos-target-fixes remplace ce fichier par la
+// version durcie (AUTH_ADMIN = mot de passe exigé).
+polkit.addRule(function (action, subject) {
+    if (!subject.isInGroup("wheel")) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var allowed = [
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.reboot",
+        "org.freedesktop.login1.suspend",
+        "org.freedesktop.login1.hibernate",
+        "org.freedesktop.NetworkManager.network-control",
+        "org.freedesktop.NetworkManager.wifi.scan",
+        "org.freedesktop.NetworkManager.settings.modify.own",
+        "org.freedesktop.NetworkManager.enable-disable-wifi",
+        "org.freedesktop.udisks2.filesystem-mount",
+    ];
+    if (allowed.indexOf(action.id) !== -1) {
+        return polkit.Result.YES;
     }
     return polkit.Result.NOT_HANDLED;
 });

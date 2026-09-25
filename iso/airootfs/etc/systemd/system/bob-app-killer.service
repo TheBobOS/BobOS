@@ -1,7 +1,0 @@
-[Unit]
-Description=BobOS — app killer (ferme les apps si pas de minage dans l'heure)
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/bob-app-killer
-User=bob

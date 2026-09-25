@@ -19,6 +19,26 @@ node_modules/
 src/
 pkg/
 
+# Calamares : construit par build.sh, installé comme PAQUET via le dépôt
+# local [bobos-local]. Ces chemins ne doivent JAMAIS être commités : c'était
+# 359 fichiers de build extraits en root dans l'arbre du profil.
+iso/airootfs/usr/lib/calamares/
+iso/airootfs/usr/include/
+iso/airootfs/usr/lib/cmake/
+iso/airootfs/usr/lib/libcalamares*.so*
+iso/airootfs/usr/share/calamares/
+iso/airootfs/usr/share/locale/
+iso/airootfs/usr/share/polkit-1/
+iso/airootfs/usr/share/man/
+iso/airootfs/usr/share/icons/hicolor/scalable/apps/calamares.svg
+iso/airootfs/usr/share/applications/calamares.desktop
+iso/airootfs/usr/bin/calamares
+
+# Scripts retirés de BobOS (bob-fetch, installateur CLI) : build.sh les
+# supprime de l'image, ils ne font plus partie du système.
+iso/airootfs/usr/bin/bob-fetch
+iso/airootfs/usr/bin/bobos-install-cli
+
 # Éditeurs / OS
 *.swp
 *~

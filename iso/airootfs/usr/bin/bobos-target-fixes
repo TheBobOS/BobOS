@@ -1,23 +1,47 @@
 #!/usr/bin/env bash
 # bobos-target-fixes — s'exécute EN CHROOT dans la cible (shellprocess_fixes).
 # $1 = nom d'utilisateur créé par Calamares.
-#   - initramfs « normal » (retire les hooks archiso du live)
-#   - purge XanMod si le CPU n'a pas AVX2
-#   - mkinitcpio -P
-#   - autologin tty1 → utilisateur installé
-#   - désactive le service live bobos-user (reset de mdp à chaque boot)
+#
+# Ici, on transforme l'image LIVE en système INSTALLÉ :
+#   - trousseau pacman propre à la machine + pacman.conf BobOS
+#   - doas / sudo / polkit : le mot de passe est demandé (plus de root gratuit)
+#   - plus d'autologin ni de splash « live » ; Hyprlock/Hypridle ajoutés
+#   - XanMod désinstallé PROPREMENT si le CPU n'est pas x86-64-v3
+#   - NVIDIA retiré si aucun GPU NVIDIA détecté
+#   - installateur (Calamares) retiré : on ne peut pas effacer son disque depuis
+#     le système installé
+#   - le clavier choisi dans l'installeur est transmis à Hyprland
+#   - services utiles activés (docker, fstrim, trim, zram, miroirs)
 set -euo pipefail
 
 USER_NAME="${1:-}"
+log() { echo "[fixes] $*"; }
 
-echo "[fixes] retrait du hook archiso mkinitcpio..."
-rm -f /etc/mkinitcpio.conf.d/archiso.conf
+# ---------------------------------------------------------------------------
+# 1. Clavier choisi à l'installation → Hyprland (la cible n'a plus de clavier
+#    AZERTY codé en dur quand l'installateur en a choisi un autre)
+# ---------------------------------------------------------------------------
+log "clavier de l'installateur → Hyprland..."
+KBD_CONF=/etc/X11/xorg.conf.d/00-keyboard.conf
+if [[ -f "$KBD_CONF" ]]; then
+    layout="$(sed -nE 's/.*"XkbLayout"[[:space:]]+"([^"]+)".*/\1/p' "$KBD_CONF" | head -n1)"
+    variant="$(sed -nE 's/.*"XkbVariant"[[:space:]]+"([^"]*)".*/\1/p' "$KBD_CONF" | head -n1)"
+    if [[ -n "${layout:-}" ]]; then
+        home="$(getent passwd "$USER_NAME" | cut -d: -f6 || true)"
+        if [[ -n "$home" && -d "$home" ]]; then
+            mkdir -p "$home/.config/hypr"
+            printf -- '-- généré à l'"'"'installation\nhl.config({ input = { kb_layout = "%s", kb_variant = "%s" } })\n' \
+                "$layout" "${variant:-}" > "$home/.config/hypr/keyboard.lua"
+            chown -R "$USER_NAME:" "$home/.config/hypr" 2>/dev/null || true
+            log "clavier Hyprland : $layout${variant:+ ($variant)}"
+        fi
+    fi
+fi
 
-# Le pacman.conf embarqué par le paquet pacman est celui d'Arch par défaut
-# (core/extra seuls) : on réécrit celui de BobOS sur la cible, sinon le système
-# installé ne verrait ni bob-core (xanmod, p10k…) ni multilib.
-# Ordre des dépôts identique à l'ISO : bob-core EN DERNIER.
-echo "[fixes] écriture de /etc/pacman.conf (repos BobOS)..."
+# ---------------------------------------------------------------------------
+# 2. Paquets : trousseau pacman + dépôts
+# ---------------------------------------------------------------------------
+log "écriture de /etc/pacman.conf (repos BobOS)..."
 cat > /etc/pacman.conf <<'PCONF'
 # /etc/pacman.conf — BobOS
 [options]
@@ -45,7 +69,120 @@ SigLevel = Never
 Server = https://bob.xem.yt/os/x86_64
 PCONF
 
-echo "[fixes] presets des kernels → default + fallback..."
+# Clé générée ICI, sur cette machine : jamais recopiée depuis l'ISO
+# (une clé maîtresse partagée dans une ISO = n'importe qui peut signer).
+log "initialisation du trousseau pacman (clé unique à cette machine)..."
+rm -rf /etc/pacman.d/gnupg
+pacman-key --init >/dev/null 2>&1 || log "pacman-key --init a échoué (on continue)"
+pacman-key --populate archlinux >/dev/null 2>&1 || log "pacman-key --populate a échoué"
+log "clés : $(pacman-key --list-keys 2>/dev/null | grep -c 'pub' || echo 0)"
+
+# ---------------------------------------------------------------------------
+# 3. Élévation : le mot de passe est demandé (le live reste « nopass »)
+# ---------------------------------------------------------------------------
+log "durcissement doas/sudo/polkit..."
+cat > /etc/doas.conf <<'DOAS'
+# BobOS installé — doas DEMANDE le mot de passe (contrairement au live).
+# setenv explicite au lieu de keepenv : on ne transmet pas tout $ENV à root.
+# persist = le mot de passe reste en cache 5 min (confort, sans porte ouverte).
+permit persist setenv { WAYLAND_DISPLAY XDG_RUNTIME_DIR DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP } :wheel
+DOAS
+# si cette version d'opendoas ne connaît pas « persist », on retombe dessus
+doas -C /etc/doas.conf 2>/dev/null \
+    || sed -i 's/^permit persist setenv/permit setenv/' /etc/doas.conf
+doas -C /etc/doas.conf 2>/dev/null && log "doas.conf valide" || log "ATTENTION doas.conf invalide"
+
+cat > /etc/sudoers.d/bobos <<'SUDO'
+# BobOS — sudo en secours de doas : mot de passe demandé comme doas.
+# (une règle NOPASSWD ici = root gratuit, exactement ce qu'on veut éviter)
+Defaults lecture=never
+%wheel ALL=(ALL:ALL) ALL
+SUDO
+chmod 0440 /etc/sudoers.d/bobos
+visudo -cf /etc/sudoers.d/bobos >/dev/null 2>&1 && log "sudoers valide" || log "ATTENTION sudoers invalide"
+
+# polkit : liste blanche d'actions, mot de passe admin exigé
+cat > /etc/polkit-1/rules.d/50-bobos.rules <<'POLKIT'
+// BobOS installé — l'admin (wheel) est authentifié, et seulement pour
+// quelques actions utiles. Pas de NetworkManager.* ni login1.* en bloc.
+polkit.addRule(function (action, subject) {
+    if (!subject.isInGroup("wheel")) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var allowed = [
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.reboot",
+        "org.freedesktop.login1.suspend",
+        "org.freedesktop.login1.hibernate",
+        "org.freedesktop.NetworkManager.network-control",
+        "org.freedesktop.NetworkManager.wifi.scan",
+        "org.freedesktop.NetworkManager.settings.modify.own",
+        "org.freedesktop.NetworkManager.enable-disable-wifi",
+        "org.freedesktop.udisks2.filesystem-mount",
+    ];
+    if (allowed.indexOf(action.id) !== -1) {
+        return polkit.Result.AUTH_ADMIN;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
+POLKIT
+
+# ---------------------------------------------------------------------------
+# 4. Fin du mode « live » : plus d'autologin, pas de splash, pas de
+#    création/reset de l'utilisateur bob, pas d'app-killer système
+# ---------------------------------------------------------------------------
+log "retrait de l'autologin et du splash live..."
+rm -f /etc/systemd/system/getty@tty1.service.d/autologin.conf
+rm -f /etc/systemd/system/getty@tty1.service.wants/bobos-splash.service
+rm -f /etc/systemd/system/multi-user.target.wants/bobos-user.service
+rm -f /etc/systemd/system/timers.target.wants/bob-app-killer.timer
+rm -f /etc/systemd/system/multi-user.target.wants/bob-app-killer.service
+rm -f /etc/systemd/system/bob-app-killer.timer /etc/systemd/system/bob-app-killer.service
+
+# L'image live est copiée telle quelle : on ne doit pas embarquer les
+# connexions NetworkManager du live (ni son machine-id, regeneré plus haut).
+rm -f /etc/NetworkManager/system-connections/* 2>/dev/null || true
+rm -f /var/lib/NetworkManager/* 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# 5. Noyau : XanMod = x86-64-v3 (AVX2, BMI1/2, FMA…). Sur un CPU plus ancien
+#    il planterait au boot → désinstallation PROPRE (pacman), pas un rm.
+# ---------------------------------------------------------------------------
+if ! /lib/ld-linux-x86-64.so.2 --help 2>/dev/null | grep -q 'x86-64-v3 (supported'; then
+    log "CPU < x86-64-v3 → XanMod désinstallé proprement (kernel stock uniquement)"
+    pacman -Rdd --noconfirm linux-xanmod linux-xanmod-headers >/dev/null 2>&1 || true
+    rm -f /etc/mkinitcpio.d/linux-xanmod.preset \
+          /boot/vmlinuz-linux-xanmod \
+          /boot/initramfs-linux-xanmod.img \
+          /boot/initramfs-linux-xanmod-fallback.img
+    rm -rf /usr/lib/modules/*xanmod* /usr/src/*xanmod*
+fi
+
+# ---------------------------------------------------------------------------
+# 6. NVIDIA : inutile sur une machine sans carte NVIDIA (poids + risque)
+# ---------------------------------------------------------------------------
+if ! grep -qs "^0x10de$" /sys/bus/pci/devices/*/vendor 2>/dev/null; then
+    log "aucun GPU NVIDIA détecté → paquets NVIDIA retirés"
+    pacman -Rdd --noconfirm nvidia-open-dkms nvidia-utils lib32-nvidia-utils >/dev/null 2>&1 || true
+fi
+
+# ---------------------------------------------------------------------------
+# 7. Installateur retiré de la cible (sinon wofi peut effacer le disque)
+# ---------------------------------------------------------------------------
+log "retrait de l'installateur de la cible..."
+rm -f /usr/share/applications/bobos-installer.desktop \
+      /usr/share/applications/calamares.desktop \
+      /usr/bin/bobos-install /usr/bin/bobos-install-cli /usr/bin/bobos-mount-iso \
+      /usr/local/bin/bobos-create-user \
+      /etc/systemd/system/bobos-user.service
+rm -rf /etc/calamares
+rm -rf /usr/include/libcalamares /usr/lib/cmake
+rm -f /usr/share/man/man8/calamares.8.gz
+
+# ---------------------------------------------------------------------------
+# 8. Presets mkinitcpio « propre » + régénération des initramfs
+# ---------------------------------------------------------------------------
+log "presets des kernels → default + fallback..."
 cat > /etc/mkinitcpio.d/linux.preset <<'PRE'
 PRESETS=('default' 'fallback')
 ALL_kver='/boot/vmlinuz-linux'
@@ -63,17 +200,6 @@ default_options=''
 fallback_options='-S autodetect'
 PRE
 
-# CPU sans AVX2 (pre-2013, ex. HP Pavilion p6) → le noyau XanMod planterait
-# au boot : on le retire, GRUB ne proposera que le kernel stock.
-if [[ -r /proc/cpuinfo ]] && ! grep -qw avx2 /proc/cpuinfo; then
-    echo "[fixes] CPU sans AVX2 → noyau XanMod retiré (kernel stock uniquement)"
-    rm -f /etc/mkinitcpio.d/linux-xanmod.preset \
-          /boot/vmlinuz-linux-xanmod \
-          /boot/initramfs-linux-xanmod.img \
-          /boot/initramfs-linux-xanmod-fallback.img
-    rm -rf /usr/lib/modules/*xanmod* /usr/src/*xanmod*
-fi
-
 # un seul kernel présent ? le preset orphelin ne doit pas casser mkinitcpio -P
 if [[ ! -f /boot/vmlinuz-linux-xanmod ]]; then
     rm -f /etc/mkinitcpio.d/linux-xanmod.preset
@@ -82,21 +208,31 @@ if [[ ! -f /boot/vmlinuz-linux ]]; then
     rm -f /etc/mkinitcpio.d/linux.preset
 fi
 
-echo "[fixes] mkinitcpio -P..."
-mkinitcpio -P
+log "mkinitcpio -P..."
 
-# autologin tty1 → l'utilisateur réellement créé (dropin dit « bob » par défaut)
-if [[ -n "$USER_NAME" && "$USER_NAME" != "bob" ]]; then
-    DROPIN=/etc/systemd/system/getty@tty1.service.d/autologin.conf
-    if [[ -f "$DROPIN" ]]; then
-        echo "[fixes] autologin tty1 → $USER_NAME"
-        sed -i "s/--autologin bob/--autologin ${USER_NAME}/" "$DROPIN"
+# L'utilisateur a-t-il choisi un chiffrement LUKS à l'installation ? Le module
+# fstab de Calamares écrit alors /etc/crypttab → il faut le hook sd-encrypt,
+# ajouté ICI (le module initcpiocfg de Calamares aurait remplacé toute la
+# liste de hooks, y compris « microcode »).
+if [[ -s /etc/crypttab ]]; then
+    log "chiffrement détecté (/etc/crypttab) → hook sd-encrypt ajouté"
+    if ! grep -qE '\bsd-encrypt\b' /etc/mkinitcpio.conf; then
+        sed -i -E 's/^HOOKS=\((.*)\)$/HOOKS=(\1 sd-encrypt)/' /etc/mkinitcpio.conf
     fi
+    # le hook n'a de sens qu'avec le module qui le cherche
+    grep -qE '\bsd-encrypt\b' /etc/mkinitcpio.conf \
+        || log "ATTENTION : sd-encrypt n'a pas pu être ajouté (ligne HOOKS inattendue ?)"
 fi
 
-# le service live (création/reset de l'utilisateur bob) n'a aucun sens sur la
-# cible : il resetterait le mdp choisi à chaque boot → désactivé.
-echo "[fixes] désactivation de bobos-user.service sur la cible..."
-rm -f /etc/systemd/system/multi-user.target.wants/bobos-user.service
+mkinitcpio -P
 
-echo "[fixes] terminé."
+# ---------------------------------------------------------------------------
+# 9. Services activés sur la cible
+# ---------------------------------------------------------------------------
+log "activation des services (docker, fstrim, miroirs)…"
+systemctl enable docker.service >/dev/null 2>&1 || true
+systemctl enable fstrim.timer >/dev/null 2>&1 || true
+systemctl enable reflector.timer >/dev/null 2>&1 || true
+systemctl enable systemd-timesyncd.service >/dev/null 2>&1 || true
+
+log "terminé."

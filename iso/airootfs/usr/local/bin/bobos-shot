@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# bobos-shot — capture d'écran (grim + slurp) ou zone, ou écran entier
+set -euo pipefail
+
+DIR="${XDG_PICTURES_DIR:-$HOME/Pictures}/Screenshots"
+mkdir -p "$DIR"
+stamp="$(date +%Y%m%d-%H%M%S)"
+
+notify() {
+    command -v notify-send &>/dev/null && \
+        notify-send -a "BobOS" -i "camera-photo" "Capture" "$1" || true
+}
+
+case "${1:-region}" in
+    full|screen)
+        grim "$DIR/$stamp.png" && notify "Écran entier → $DIR/$stamp.png"
+        ;;
+    window)
+        # Hyprland expose l'active window via hyprctl
+        win="$(hyprctl activewindow -j 2>/dev/null | jq -r '.at[0], .at[1], .size[0], .size[1]' 2>/dev/null | paste -sd' ' || true)"
+        if [[ -n "$win" ]]; then
+            read -r x y w h <<<"$win"
+            grim -g "${x},${y},${w},${h}" "$DIR/$stamp.png" \
+                && notify "Fenêtre → $DIR/$stamp.png"
+        else
+            grim "$DIR/$stamp.png" && notify "Écran entier → $DIR/$stamp.png"
+        fi
+        ;;
+    region|*)
+        # slurp retourne « x,y w h » : on le convertit au format de grim
+        sel="$(slurp 2>/dev/null)" || exit 0
+        [[ -n "$sel" ]] || exit 0
+        geom="$(printf '%s' "$sel" | awk '{printf "%s,%s %sx%s", $1, $2, $3, $4}')"
+        grim -g "$geom" "$DIR/$stamp.png" && notify "Zone → $DIR/$stamp.png"
+        ;;
+esac

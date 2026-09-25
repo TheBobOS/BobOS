@@ -1,0 +1,18 @@
+[Unit]
+Description=BobOS — initialise le trousseau de clés pacman (live)
+# Le trousseau est un tmpfs (voir etc-pacman.d-gnupg.mount) : il est créé
+# À CHAQUE BOOT, sur CETTE machine. Aucune clé privée ne voyage dans l'ISO
+# (c'était le risque SEC-04 : une ISO avec la clé maîtresse de l'hôte).
+Requires=etc-pacman.d-gnupg.mount
+After=etc-pacman.d-gnupg.mount time-sync.target
+BindsTo=etc-pacman.d-gnupg.mount
+Before=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/pacman-key --init
+ExecStart=/usr/bin/pacman-key --populate archlinux
+
+[Install]
+WantedBy=multi-user.target

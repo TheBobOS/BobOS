@@ -1,5 +1,13 @@
 **BobOS — Plan de build**
 
+> ⚠️ Document de conception d'origine, conservé pour l'histoire. L'état
+> réel de l'OS est dans le `README.md` ; l'audit complet (62 constats) et ce
+> qui a été corrigé sont dans `RAPPORT-AUDIT.md`. Écarts connus avec ce plan :
+> GRUB au lieu de rEFInd (Calamares), installateur graphique unique,
+> `bob fixme` refait depuis le cache pacman, `bob dotfiles apply` non
+> destructif, pas de Vesktop (Discord officiel), `bob-setup` n'affiche que
+> des versions.
+
 *Base système*
 - Arch Linux (rolling, douleur assumée)
 - Kernel `linux-xanmod` (perf gaming/latence)

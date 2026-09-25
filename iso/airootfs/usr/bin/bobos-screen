@@ -1,20 +1,59 @@
 #!/usr/bin/env bash
 # bobos-screen — écran sur le mode max (résolution + rafraîchissement)
-# + tentative de forçage 1080p si l'EDID donne des modes trop bas (stretched)
+# + tentative de forçage 1080p si l'EDID donne des modes trop bas (écran étiré)
+#
+# Sûreté : chaque mode appliqué est VÉRIFIÉ ; si l'écran ne l'a pas pris
+# (mode hors plage → écran noir), on revient immédiatement à l'ancien mode
+# (BOB-10 : avant, le script pouvait laisser un écran noir sans issue).
 set -u
 
+FLAG="$HOME/.config/bobos/screen-manual"
+
 # choix manuel conservé (bobos-res) : on ne touche à rien
-if [ -f "$HOME/.config/bobos/screen-manual" ]; then
+if [ -f "$FLAG" ]; then
     exit 0
 fi
 
-# En VM : force 1920x1080 (virt-viewer auto-scale → flou sinon)
+# width <renvoie la largeur active d'un écran>
+width_of() {
+    hyprctl monitors -j 2>/dev/null \
+        | jq -r --arg n "$1" '.[] | select(.name==$n) | .width' 2>/dev/null | head -n1
+}
+
+# apply <écran> <mode> : applique, vérifie, revient en arrière si ça rate
+apply() {
+    local name="$1" mode="$2" want prev
+    want="${mode%%x*}"                 # ex. 1920x1080@60 → 1920
+    prev="$(hyprctl monitors -j 2>/dev/null \
+        | jq -r --arg n "$name" '.[] | select(.name==$n) | "\(.width)x\(.height)@\(.refreshRate)"' 2>/dev/null | head -n1)"
+
+    hyprctl keyword monitor "$name,$mode,auto,1" >/dev/null 2>&1 || return 1
+    sleep 1
+
+    local got
+    got="$(width_of "$name")"
+    if [ -z "$got" ] || [ "$got" -lt "$want" ] 2>/dev/null; then
+        # le mode n'a pas été pris → retour à l'état précédent
+        if [ -n "$prev" ]; then
+            hyprctl keyword monitor "$name,$prev,auto,1" >/dev/null 2>&1 || true
+        fi
+        command -v notify-send >/dev/null 2>&1 && \
+            notify-send -u critical "BobOS" "Mode $mode refusé par l'écran — retour au mode précédent." || true
+        return 1
+    fi
+    return 0
+}
+
+# --- En VM : 1080p (sinon virt-viewer met le flou) ------------------------
 if systemd-detect-virt -q 2>/dev/null; then
-    hyprctl keyword monitor ",1920x1080@60,auto,1" >/dev/null 2>&1
+    mons="$(hyprctl monitors -j 2>/dev/null)" || exit 0
+    echo "$mons" | jq -r '.[].name' | while read -r name; do
+        apply "$name" "1920x1080@60" || true
+    done
     exit 0
 fi
 
-# attendre que Hyprland expose les outputs
+# --- Matériel : attendre que Hyprland expose les outputs -------------------
 mons=""
 for _ in $(seq 1 15); do
     mons="$(hyprctl monitors -j 2>/dev/null)" && break
@@ -33,30 +72,20 @@ $(echo "$mon" | jq -r '
      | {px: ((.w|tonumber) * (.h|tonumber)), hz: (.hz|tonumber),
         mode: (.w + "x" + .h + "@" + .hz)}]
     | sort_by(.px, .hz) | last
-    | if . == null then " " else "\(.mode) \(.px)" end') 
+    | if . == null then " " else "\(.mode) \(.px)" end')
 EOF
     [ -n "${best:-}" ] || continue
 
     if [ "${best_px:-0}" -lt $((1920 * 1080)) ]; then
-        # l'EDID est capricieux (VGA souvent) → on TENTE du plus grand au plus petit
-        applied=""
+        # EDID capricieux (VGA) → on tente du plus grand au plus petit,
+        # chaque tentative est vérifiée et annulée si refusée
         for cand in 1920x1080@60 1600x900@60 1366x768@60; do
-            hyprctl keyword monitor "$name,$cand,auto,1" >/dev/null 2>&1
-            sleep 1
-            want_w="${cand%%x*}"
-            got_w="$(hyprctl monitors -j 2>/dev/null \
-                | jq -r --arg n "$name" '.[] | select(.name==$n) | .width')"
-            if [ -n "$got_w" ] && [ "$got_w" -ge "$want_w" ] 2>/dev/null; then
-                applied=1
+            if apply "$name" "$cand"; then
                 break
             fi
         done
-        # dernier recours : au moins le max listé par le driver
-        if [ -z "$applied" ]; then
-            hyprctl keyword monitor "$name,$best,auto,1" >/dev/null 2>&1
-        fi
     else
-        hyprctl keyword monitor "$name,$best,auto,1" >/dev/null 2>&1
+        apply "$name" "$best" || true
     fi
 done
 exit 0

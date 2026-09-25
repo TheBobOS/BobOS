@@ -1,0 +1,44 @@
+#!/usr/sbin/nft -f
+# BobOS — pare-feu martien (profil « maison »)
+# Identique au profil public, PLUS les ports de découverte en réseau local,
+# limités aux trois plages privées (Steam Remote Play, KDE Connect, LocalSend).
+# À n'utiliser que chez soi, sur un réseau de confiance.
+
+table inet bobos
+delete table inet bobos
+
+table inet bobos {
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        ct state invalid drop
+        ct state established,related accept
+        iif "lo" accept
+
+        # ICMPv4 : ping limité, le reste accepté
+        icmp type echo-request limit rate 5/second accept
+        icmp type echo-request drop
+        ip protocol icmp accept
+
+        # ICMPv6 : indispensable
+        icmpv6 type echo-request limit rate 5/second accept
+        icmpv6 type echo-request drop
+        meta l4proto ipv6-icmp accept
+
+        # DHCP client (v4 + v6)
+        udp sport 67 udp dport 68 accept
+        ip6 saddr fe80::/10 udp sport 547 udp dport 546 accept
+
+        # Réseau local uniquement :
+        #   Steam Remote Play  udp 27031-27036 / tcp 27036-27037
+        #   KDE Connect        tcp+udp 1714-1764
+        #   LocalSend          udp 53317
+        ip saddr { 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 } udp dport { 27031-27036, 1714-1764, 53317 } accept
+        ip saddr { 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 } tcp dport { 1714-1764, 27036-27037 } accept
+
+        # mDNS / SSDP sur le LAN (imprimantes, TV, box)
+        ip saddr { 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 } udp dport { 5353, 1900 } accept
+
+        counter drop
+    }
+}

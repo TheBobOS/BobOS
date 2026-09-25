@@ -1,0 +1,10 @@
+[Unit]
+Description=BobOS — garde martienne anti-flémard (toutes les heures)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+Persistent=false
+
+[Install]
+WantedBy=timers.target

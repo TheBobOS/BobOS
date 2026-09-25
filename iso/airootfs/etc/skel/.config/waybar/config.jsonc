@@ -6,7 +6,7 @@
 
     "modules-left": ["custom/menu", "custom/settings", "custom/firefox", "custom/files", "custom/terminal"],
     "modules-center": ["clock"],
-    "modules-right": ["network", "cpu", "memory", "battery", "tray", "custom/power"],
+    "modules-right": ["pulseaudio", "backlight", "bluetooth", "network", "cpu", "memory", "battery", "tray", "custom/power"],
 
     "custom/menu": {
         "format": "☰ Applications",
@@ -76,6 +76,29 @@
         },
         "format": "{capacity}%",
         "format-plugged": "{capacity}% (AC)"
+    },
+
+    "pulseaudio": {
+        "format": "vol {volume}%",
+        "format-muted": "vol sourd",
+        "format-icons": {
+            "default": "",
+            "overload": ""
+        },
+        "on-click": "pavucontrol"
+    },
+
+    "backlight": {
+        "format": "lum {percent}%",
+        "format-icons": ["", ""]
+    },
+
+    "bluetooth": {
+        "format": "bt {status}",
+        "format-connected": "bt {device_alias}",
+        "format-disconnected": "bt off",
+        "tooltip-format": "{device_enumerate}",
+        "on-click": "blueman-manager"
     },
 
     "tray": {

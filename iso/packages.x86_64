@@ -35,6 +35,7 @@ wayland
 wayland-protocols
 waybar
 wofi
+hyprpaper
 network-manager-applet
 qt6ct
 wl-clipboard
@@ -46,15 +47,57 @@ thunar
 polkit
 polkit-gnome
 
-# GPU (NVIDIA + AMDGPU préchargés)
+# Briques de bureau (notifications, capture, verrouillage, énergie…)
+mako
+hyprlock
+hypridle
+grim
+slurp
+brightnessctl
+playerctl
+pavucontrol
+swayosd
+cliphist
+power-profiles-daemon
+bluez
+bluez-utils
+
+# Portails (partage d'écran / sélecteurs de fichiers sous Wayland)
+xdg-desktop-portal
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+
+# Polices : Nerd Font (p10k, eza) + emoji
+ttf-meslo-nerd
+ttf-nerd-fonts-symbols
+noto-fonts
+noto-fonts-emoji
+
+# Entretien système (miroirs, cache, zram, chiffrement, snapshots)
+reflector
+pacman-contrib
+zram-generator
+cryptsetup
+os-prober
+
+# GPU (NVIDIA DKMS : modules compilés pour linux ET linux-xanmod)
 mesa
 xf86-video-amdgpu
 vulkan-radeon
-nvidia-open
+vulkan-intel
+lib32-vulkan-radeon
+lib32-vulkan-intel
+intel-media-driver
+dkms
+linux-headers
+nvidia-open-dkms
 nvidia-utils
 lib32-mesa
-lib32-vulkan-radeon
 lib32-nvidia-utils
+
+# Microcode CPU (Spectre, Downfall, Zenbleed…)
+intel-ucode
+amd-ucode
 
 # Son
 pipewire
@@ -67,6 +110,8 @@ easyeffects
 zsh
 zsh-theme-powerlevel10k-git
 zsh-completions
+zsh-autosuggestions
+zsh-syntax-highlighting
 fzf
 
 # Navigation fichiers
@@ -106,7 +151,9 @@ docker
 docker-compose
 figlet
 
-# Installeur (Calamares, compilé au build — dépendances runtime)
+# Installeur (Calamares : PAQUET construit par build.sh, servi par le dépôt
+# local [bobos-local] — plus d'extraction manuelle dans l'arbre du profil)
+calamares
 kcoreaddons
 kpmcore
 libpwquality

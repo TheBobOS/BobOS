@@ -2,23 +2,86 @@
 # bobos-settings — panneau paramètres BobOS (menu wofi)
 set -euo pipefail
 
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB"
+
+# Le mode anti-flémard est OPT-IN : il ferme tes applications quand tu ne
+# mines pas (BOB-02). Activé ? → on propose de le désactiver.
+if systemctl --user is-enabled --quiet bob-app-killer.timer 2>/dev/null; then
+    KILLER_STATE="désactiver le mode anti-flémard"
+else
+    KILLER_STATE="activer le mode anti-flémard (ferme tes apps si tu ne mines pas)"
+fi
+
+FW_STATE="pare-feu : profil $(cat /etc/bobos/.profile 2>/dev/null || echo public)"
+
 choice="$(printf '%s\n' \
     "Écran — choisir la résolution…" \
     "Écran — mode auto (résolution et Hz max)" \
     "Réseau — nmtui" \
+    "Bluetooth — blueman" \
     "Son — EasyEffects" \
+    "Son — contrôle du volume (pavucontrol)" \
+    "Verrouiller l'écran maintenant" \
+    "Pare-feu — profil public (strict)" \
+    "Pare-feu — profil maison (+ LAN)" \
+    "$FW_STATE" \
+    "$KILLER_STATE" \
     "Mises à jour — bob-update" \
     "Infos système — fastfetch" \
-    "Énergie — éteindre / redémarrer" | \
-    wofi --dmenu --prompt "Paramètres")" || exit 0
+    "Énergie — éteindre / redémarrer / veille" | \
+    wofi --dmenu --prompt "Paramètres BobOS")" || exit 0
 
 case "$choice" in
-    *choisir*)         bobos-res ;;
-    Écran*)            rm -f "$HOME/.config/bobos/screen-manual"; bobos-screen ;;
-    Réseau*)           kitty -e nmtui ;;
-    Son*)              easyeffects >/dev/null 2>&1 & ;;
-    Mises*)            kitty -e bob-update ;;
-    Infos*)            kitty -e fastfetch ;;
-    Énergie*)          bobos-power ;;
+    *choisir*)
+        bobos-res
+        ;;
+    Écran*)
+        rm -f "$HOME/.config/bobos/screen-manual"
+        bobos-screen
+        ;;
+    Réseau*)
+        kitty -e nmtui
+        ;;
+    Bluetooth*)
+        blueman-manager >/dev/null 2>&1 &
+        ;;
+    Son*)
+        case "$choice" in
+            *volume*) pavucontrol >/dev/null 2>&1 & ;;
+            *)        easyeffects  >/dev/null 2>&1 & ;;
+        esac
+        ;;
+    Verrouiller*)
+        hyprlock &
+        ;;
+    *public*)
+        kitty -e bob-firewall on public
+        ;;
+    *maison*)
+        kitty -e bob-firewall on maison
+        ;;
+    *anti-flémard*)
+        if systemctl --user is-enabled --quiet bob-app-killer.timer 2>/dev/null; then
+            systemctl --user disable --now bob-app-killer.timer
+            log "mode anti-flémard désactivé. Breathe."
+        else
+            read -rp "Le mode anti-flémard fermera Firefox/Steam/Discord/OBS si tu ne mines pas pendant 1 h. Activer ? [o/N] " ok
+            if [[ "${ok:-}" == [oO] ]]; then
+                systemctl --user enable --now bob-app-killer.timer
+                log "mode anti-flémard activé (bobcoin mine pour éviter les purges)"
+            fi
+        fi
+        ;;
+    Mises*)
+        kitty -e bob-update
+        ;;
+    Infos*)
+        kitty -e fastfetch
+        ;;
+    Énergie*)
+        bobos-power
+        ;;
 esac
 exit 0

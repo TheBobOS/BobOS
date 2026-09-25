@@ -1,40 +1,43 @@
 #!/usr/sbin/nft -f
-# BobOS — pare-feu martien
-# input drop sauf port 22 (SSH) + connexions établies + DNS/DHCP
+# BobOS — pare-feu martien (profil « public », strict)
+#
+# On ne gère QUE notre table : aucune chaîne « forward » (sinon Docker et
+# libvirt perdent le routage de leurs conteneurs/machines) et surtout pas de
+# « flush ruleset » (ça effacerait aussi le NAT de Docker). Voir audit
+# NET-01 / NET-02.
+#
+# L'ordre des règles ICMP est important : le « drop » du ping DOIT précéder
+# l'acceptation globale du protocole, sinon le rate-limit ne servirait à rien.
 
-flush ruleset
+table inet bobos
+delete table inet bobos
 
 table inet bobos {
     chain input {
-        type filter hook input priority 0; policy drop;
+        type filter hook input priority filter; policy drop;
 
-        # connexions établies / relatees
+        ct state invalid drop
         ct state established,related accept
-
-        # loopback
         iif "lo" accept
 
-        # SSH
-        tcp dport 22 accept
+        # ICMPv4 : ping limité, le reste (erreurs, PMTU) accepté
+        icmp type echo-request limit rate 5/second accept
+        icmp type echo-request drop
+        ip protocol icmp accept
 
-        # DNS + DHCP (sinon pas de réseau)
-        udp dport 53 accept
-        tcp dport 53 accept
-        udp dport 67,68 accept
+        # ICMPv6 : NDP / RA / PMTU sont INDISPENSABLES, jamais limités
+        icmpv6 type echo-request limit rate 5/second accept
+        icmpv6 type echo-request drop
+        meta l4proto ipv6-icmp accept
 
-        # ICMP limité (ping)
-        ip protocol icmp limit rate 5/second accept
-        ip6 nexthdr icmpv6 limit rate 5/second accept
+        # DHCP client (v4 + v6) : sans ça, pas de réseau du tout
+        udp sport 67 udp dport 68 accept
+        ip6 saddr fe80::/10 udp sport 547 udp dport 546 accept
 
-        # todo : martien
+        # SSH : décommenter si (et seulement si) sshd est activé
+        # tcp dport 22 accept
+
         counter drop
     }
-
-    chain forward {
-        type filter hook forward priority 0; policy drop;
-    }
-
-    chain output {
-        type filter hook output priority 0; policy accept;
-    }
+    # pas de chain forward : Docker / libvirt gèrent leur propre routage
 }

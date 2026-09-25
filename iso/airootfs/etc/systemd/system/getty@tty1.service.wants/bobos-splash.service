@@ -1,1 +1,1 @@
-/usr/lib/systemd/system/bobos-splash.service
+/etc/systemd/system/bobos-splash.service

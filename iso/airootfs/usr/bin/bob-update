@@ -1,26 +1,60 @@
 #!/usr/bin/env bash
-# bob-update — mise à jour BobOS (pacman + repos custom)
+# bob-update — mise à jour complète de BobOS
 set -euo pipefail
+
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB"
+
+require_root "$@"
 
 echo "=============================="
 echo "   bob-update — BobOS"
 echo "=============================="
 
-if [[ $EUID -ne 0 ]]; then
-    if command -v doas &>/dev/null; then
-        exec doas "$0" "$@"
-    else
-        exec sudo -E "$0" "$@"
-    fi
+# 1. News Arch : les interventions manuelles cassent les mises à jour
+echo "[bob-update] news Arch récentes :"
+if news="$(curl -fsS --max-time 15 https://archlinux.org/feeds/news/ 2>/dev/null)"; then
+    printf '%s' "$news" \
+        | grep -oP '<title>\K[^<]+' \
+        | tail -n +2 | head -4 | sed 's/^/  • /' || true
+else
+    echo "  (pas de réseau : news illisibles, la mise à jour échouera aussi)"
+fi
+echo
+
+read -rp "Continuer ? [O/n] " ok
+[[ "${ok:-o}" == [nN] ]] && exit 0
+
+# 2. Trousseau EN PREMIER : quand Arch change ses clés, une mise à jour
+#    normale échoue (le nouveau paquet est signé avec une clé inconnue).
+log "mise à jour du trousseau de clés…"
+pacman -Sy --needed archlinux-keyring
+
+# 3. La mise à jour elle-même, INTERACTIVE (plus de --noconfirm : sur un
+#    conflit, la réponse par défaut est « non » et l'update échouait en silence)
+log "mise à jour du système…"
+if pacman -Su; then
+    :
+else
+    log_err "la mise à jour a échoué ou a été annulée"
+    log "pour revenir en arrière : bob fixme"
+    exit 1
 fi
 
-# snapshot avant update (si btrfs/snapshots dispo)
-mkdir -p /var/lib/bobos
-echo "$(date -u +%FT%TZ)" > /var/lib/bobos/last-update
-echo "[bob-update] dernière update : $(cat /var/lib/bobos/last-update)"
-echo "[bob-update] en cas de galère : bob fixme"
-echo
+# 4. Fichiers de configuration remplacés (.pacnew) : on les montre
+if command -v pacdiff &>/dev/null; then
+    echo
+    log "fichiers .pacnew en attente :"
+    pacdiff -o | sed 's/^/  /' || true
+fi
 
-pacman -Syu --noconfirm
-echo
-echo "[bob-update] Terminé. KEKW"
+# 5. Cache : on garde 2 versions par paquet (bob fixme s'en sert)
+if command -v paccache &>/dev/null; then
+    paccache -rk2 &>/dev/null || true
+fi
+
+# 6. Marqueur pour bob fixme (la dernière transaction ALPM sert de référence)
+install -d -m 0755 /var/lib/bobos
+date -u +%FT%TZ > /var/lib/bobos/last-update
+log "update terminée. En cas de galère : bob fixme"

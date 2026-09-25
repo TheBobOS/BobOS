@@ -1,36 +1,45 @@
 #!/usr/bin/env bash
 # bobcoin — ledger intergalactique BobOS
-# solde injecté dans le prompt zsh via `bobcoin --prompt`
+# Solde injecté dans le prompt zsh via `bobcoin --prompt`.
+#
+# L'état est PAR UTILISATEUR (~/.local/state/bobos/bobcoin) : pas de fichier
+# world-writable dans /var/lib, donc plus d'élévation de privilèges possible
+# via ce ledger (audit SEC-03 / BOB-06).
 set -euo pipefail
 
-LEDGER_DIR="/var/lib/bobcoin"
-LEDGER="$LEDGER_DIR/balance"
-
-ensure_ledger() {
-    doas mkdir -p "$LEDGER_DIR" 2>/dev/null || mkdir -p "$LEDGER_DIR" 2>/dev/null || true
-    if [[ ! -f "$LEDGER" ]]; then
-        echo "1000" > "$LEDGER" 2>/dev/null || echo "1000" > /tmp/bobcoin-balance
-        LEDGER="${LEDGER:-/tmp/bobcoin-balance}"
-    fi
-    doas chmod 666 "$LEDGER" 2>/dev/null || chmod 666 "$LEDGER" 2>/dev/null || true
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB" || {
+    log_err "bibliothèque BobOS introuvable : $BOBOS_LIB"
+    exit 1
 }
 
-get_balance() {
-    ensure_ledger
-    cat "$LEDGER" 2>/dev/null || cat /tmp/bobcoin-balance 2>/dev/null || echo "0"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/bobcoin"
+LEDGER="$STATE_DIR/balance"
+MINE_FILE="$STATE_DIR/last-mine"
+
+balance() { read_int "$LEDGER" 0; }
+
+set_balance() {  # set_balance <entier ≥ 0>
+    local v="${1:-}"
+    [[ "$v" =~ ^[0-9]{1,18}$ ]] || { log_err "solde invalide : $v"; return 1; }
+    mkdir -p "$STATE_DIR"
+    printf '%s\n' "$v" > "$LEDGER"
 }
 
 case "${1:-}" in
     --prompt|-p)
-        bal="$(get_balance)"
-        echo "◈ ${bal} BC"
+        # lecture seule : aucun doas, aucune création, aucun chmod (le prompt
+        # zsh appelle ça à chaque ligne de commande)
+        printf '◈ %s BC\n' "$(balance)"
         ;;
     mine|m)
-        # minage passif : +10 BC par invocation
-        bal="$(get_balance)"
-        new=$((bal + 10))
-        echo "$new" > "$LEDGER" 2>/dev/null || echo "$new" > /tmp/bobcoin-balance
-        echo "[bobcoin] tu as miné 10 BC. Solde : $new"
+        new=$(( $(balance) + 10 ))
+        set_balance "$new"
+        # horodatage RÉEL (l'ancien code faisait `touch`, donc le contenu
+        # restait vide et le killer fermait tout : audit BOB-02)
+        date +%s > "$MINE_FILE"
+        log "tu as miné 10 BC. Solde : $new"
         ;;
     send|s)
         if [[ $# -lt 3 ]]; then
@@ -38,20 +47,28 @@ case "${1:-}" in
             exit 1
         fi
         dest="$2"; amount="$3"
-        bal="$(get_balance)"
-        if (( amount > bal )); then
-            echo "[bobcoin] solde insuffisant ($bal BC)" >&2
+        # montant strictement positif et strictement numérique (sinon
+        # `send x -500` augmentait le solde)
+        if [[ ! "$amount" =~ ^[0-9]{1,18}$ ]] || (( amount == 0 )); then
+            log_err "montant invalide (entier > 0 attendu) : $amount"
             exit 1
         fi
-        new=$((bal - amount))
-        echo "$new" > "$LEDGER" 2>/dev/null || echo "$new" > /tmp/bobcoin-balance
-        echo "[bobcoin] envoyé $amount BC à $dest. Solde : $new"
+        bal="$(balance)"
+        if (( amount > bal )); then
+            log_err "solde insuffisant ($bal BC)"
+            exit 1
+        fi
+        set_balance $(( bal - amount ))
+        log "envoyé $amount BC à $dest. Solde : $(( bal - amount ))"
         ;;
     balance|b|"")
-        echo "$(get_balance) BC"
+        printf '%s BC\n' "$(balance)"
+        ;;
+    last-mine)
+        read_int "$MINE_FILE" 0
         ;;
     *)
-        echo "usage : bobcoin [--prompt|mine|send <dest> <montant>|balance]" >&2
+        echo "usage : bobcoin [--prompt|mine|send <dest> <montant>|balance|last-mine]" >&2
         exit 1
         ;;
 esac

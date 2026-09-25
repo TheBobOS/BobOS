@@ -1,5 +1,6 @@
 # BobOS — configuration Powerlevel10k
 typeset -g POWERLEVEL9K_MODE=nerdfont-v3
+typeset -g POWERLEVEL9K_NERD_FONT_VARIANT=meslo
 typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR=''
 typeset -g POWERLEVEL9K_RIGHT_SEGMENT_SEPARATOR=''
 typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
