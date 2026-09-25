@@ -1,0 +1,12 @@
+[Unit]
+Description=BobOS — vérification quotidienne des mises à jour
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=24h
+# horodatage : on regarde juste après le déjeuner
+OnCalendar=*-*-* 12:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

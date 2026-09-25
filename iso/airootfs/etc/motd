@@ -6,6 +6,7 @@ Commandes utiles :
   bob-snake       le jeu (il s'ouvre tout seul au démarrage du bureau)
   shutdown        éteint le PC en disant « À plus dans l'bus »
   bob-update      mise à jour (news, trousseau, interactive)
+  bobos-update    mise à jour GRAPHIQUE (menu, ou clic sur ⬆ dans la barre)
   bob fixme       retour arrière depuis le cache pacman
   bob dotfiles apply   réapplique /etc/skel (avec sauvegarde)
   bob-setup       wizard du premier boot

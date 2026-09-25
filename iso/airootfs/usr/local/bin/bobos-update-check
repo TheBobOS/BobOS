@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# bobos-update-check — vérifie les MAJ en arrière-plan et prévient s'il y en a.
+# Lancé par l'unité utilisateur bobos-update-check.timer (une fois par jour)
+# et au démarrage de la session. N'installe RIEN tout seul : il écrit le
+# compteur (lu par la barre) et envoie une notification.
+set -euo pipefail
+
+exec /usr/local/bin/bobos-update --notify

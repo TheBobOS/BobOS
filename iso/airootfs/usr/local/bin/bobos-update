@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# bobos-update — mettre à jour BobOS, version graphique.
+#
+#   bobos-update            menu graphique (wofi) : liste les MAJ puis confirme
+#   bobos-update --check    affiche juste le nombre de MAJ (pour la barre)
+#   bobos-update --notify   notifie s'il y a des MAJ + écrit le compteur
+#
+# La mise à jour elle-même est faite par /usr/bin/bob-update (news Arch,
+# trousseau d'abord, pacman interactif, .pacnew, cache) : un seul chemin de
+# mise à jour pour le graphique et le terminal.
+set -euo pipefail
+
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB"
+
+COUNT_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/bobos/updates-count"
+mkdir -p "$(dirname "$COUNT_FILE")" 2>/dev/null || true
+
+# --- détection des MAJ (sans root : checkupdates utilise une base temporaire)
+pending_count() {
+    if command -v checkupdates >/dev/null 2>&1; then
+        checkupdates 2>/dev/null | grep -c . || true
+    else
+        # checkupdates = pacman-contrib ; sans lui, pas de détection sans root
+        echo "-1"
+    fi
+}
+
+pending_list() {
+    checkupdates 2>/dev/null || true
+}
+
+save_count() { printf '%s\n' "$1" > "$COUNT_FILE" 2>/dev/null || true; }
+
+# --- modes sans interface -------------------------------------------------
+case "${1:-}" in
+    --check)
+        pending_count
+        exit 0
+        ;;
+    --notify)
+        n="$(pending_count)"
+        if [[ "$n" =~ ^[0-9]+$ ]] && (( n > 0 )); then
+            save_count "$n"
+            if command -v notify-send >/dev/null 2>&1; then
+                notify-send -u normal -a "BobOS" -i "system-software-update" \
+                    "Mise à jour disponible" \
+                    "$n paquet(s) à mettre à jour. Clic sur la barre ou tape : bobos-update"
+            fi
+        else
+            save_count 0
+        fi
+        exit 0
+        ;;
+esac
+
+# --- mode graphique -------------------------------------------------------
+# Lancé depuis le menu d'applications : pas de terminal. On s'en ouvre un
+# (le mot de passe se tape dedans, doas le mémorise quelques minutes).
+if [[ ! -t 0 && -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
+    if command -v kitty >/dev/null 2>&1; then
+        exec kitty --title "Mise à jour BobOS" -e /usr/local/bin/bobos-update
+    fi
+    exec /usr/bin/notify-send -u critical "BobOS" \
+        "Ouvre un terminal et lance : bobos-update" || true
+fi
+
+if ! command -v checkupdates >/dev/null 2>&1; then
+    printf '%s\n' "bobos-update : checkupdates est absent (paquet pacman-contrib)."
+    exit 1
+fi
+
+pkgs="$(pending_list)"
+n="$(printf '%s' "$pkgs" | grep -c . || true)"
+save_count "$n"
+
+if (( n == 0 )); then
+    command -v notify-send >/dev/null 2>&1 && \
+        notify-send -a "BobOS" -i "emblem-ok-symbolic" "BobOS" "Tout est à jour." || true
+    echo "BobOS : tout est à jour."
+    exit 0
+fi
+
+echo "BobOS : $n paquet(s) à mettre à jour."
+
+# menu de confirmation
+answer="$(printf '%s\n' "Mettre à jour maintenant ($n paquets)" "Plus tard" | \
+    wofi --dmenu --prompt "Mises à jour disponibles" 2>/dev/null || true)"
+
+[[ "$answer" == Mettre* ]] || { echo "Annulé."; exit 0; }
+
+# on montre le détail dans le terminal qui a lancé la commande
+printf '%s\n' "$pkgs" | sed 's/^/  • /'
+
+# élévation : TTY → doas (mot de passe dans le terminal), sinon pkexec
+# (demande graphique via l'agent polkit)
+if [[ -t 0 ]]; then
+    exec doas /usr/bin/bob-update
+fi
+exec pkexec /usr/bin/bob-update

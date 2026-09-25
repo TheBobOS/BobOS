@@ -23,7 +23,10 @@ else
 fi
 echo
 
-read -rp "Continuer ? [O/n] " ok
+# « || true » INDISPENSABLE : en mode graphique (pkexec) stdin n'est pas un
+# terminal, le read renvoie EOF… et avec « set -e » ça tuait le script juste
+# après les news, sans rien installer.
+read -rp "Continuer ? [O/n] " ok || true
 [[ "${ok:-o}" == [nN] ]] && exit 0
 
 # 2. Trousseau EN PREMIER : quand Arch change ses clés, une mise à jour
@@ -31,15 +34,27 @@ read -rp "Continuer ? [O/n] " ok
 log "mise à jour du trousseau de clés…"
 pacman -Sy --needed archlinux-keyring
 
-# 3. La mise à jour elle-même, INTERACTIVE (plus de --noconfirm : sur un
-#    conflit, la réponse par défaut est « non » et l'update échouait en silence)
-log "mise à jour du système…"
-if pacman -Su; then
-    :
+# 3. La mise à jour elle-même. En mode graphique (bobos-update → pkexec) il n'y
+#    a pas de terminal : sans --noconfirm, pacman n'a personne à interroger et
+#    la transaction meurt en silence. Les erreurs restent, elles, remontées.
+if [[ -t 0 ]]; then
+    log "mise à jour du système…"
+    if pacman -Su; then
+        :
+    else
+        log_err "la mise à jour a échoué ou a été annulée"
+        log "pour revenir en arrière : bob fixme"
+        exit 1
+    fi
 else
-    log_err "la mise à jour a échoué ou a été annulée"
-    log "pour revenir en arrière : bob fixme"
-    exit 1
+    log "mise à jour du système (mode graphique, sans questions)…"
+    if pacman -Su --noconfirm; then
+        :
+    else
+        log_err "la mise à jour a échoué (conflit de fichier, paquet à supprimer ?)"
+        log "relance dans un terminal pour répondre aux questions : bob-update"
+        exit 1
+    fi
 fi
 
 # 4. Fichiers de configuration remplacés (.pacnew) : on les montre
@@ -54,7 +69,11 @@ if command -v paccache &>/dev/null; then
     paccache -rk2 &>/dev/null || true
 fi
 
-# 6. Marqueur pour bob fixme (la dernière transaction ALPM sert de référence)
-install -d -m 0755 /var/lib/bobos
-date -u +%FT%TZ > /var/lib/bobos/last-update
+# 6. Marqueur pour bob fixme (la dernière transaction ALPM sert de référence).
+# Non bloquant : si /var n'est pas inscriptible, la MAJ a réussi quand même.
+if install -d -m 0755 /var/lib/bobos 2>/dev/null; then
+    date -u +%FT%TZ > /var/lib/bobos/last-update 2>/dev/null || true
+else
+    log "marqueur /var/lib/bobos/last-update non écrit (permission ?)"
+fi
 log "update terminée. En cas de galère : bob fixme"

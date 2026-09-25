@@ -6,7 +6,18 @@
 
     "modules-left": ["custom/menu", "custom/settings", "custom/firefox", "custom/files", "custom/terminal"],
     "modules-center": ["clock"],
-    "modules-right": ["pulseaudio", "backlight", "bluetooth", "network", "cpu", "memory", "battery", "tray", "custom/power"],
+    "modules-right": ["custom/update", "pulseaudio", "backlight", "bluetooth", "network", "cpu", "memory", "battery", "tray", "custom/power"],
+
+    // Compteur de mises à jour : écrit par bobos-update-check (timer quotidien
+    // + démarrage de session). Clic = mise à jour graphique.
+    "custom/update": {
+        "format": "⬆ {}",
+        "return-empty": true,
+        "interval": 300,
+        "exec": "cat ${XDG_STATE_HOME:-$HOME/.local/state}/bobos/updates-count 2>/dev/null; echo",
+        "on-click": "bobos-update",
+        "tooltip": true
+    },
 
     "custom/menu": {
         "format": "☰ Applications",

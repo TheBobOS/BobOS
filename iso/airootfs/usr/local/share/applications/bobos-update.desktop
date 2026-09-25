@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Mettre à jour BobOS
+Name[en]=Update BobOS
+Comment=Vérifier et installer les mises à jour du système
+Comment[en]=Check for and install system updates
+Exec=/usr/local/bin/bobos-update
+Icon=system-software-update
+Terminal=false
+Categories=System;PackageManager;Settings;
+Keywords=update;upgrade;pacman;maj;
+StartupNotify=true

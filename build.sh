@@ -178,7 +178,12 @@ PY
     while IFS= read -r f; do
         rel="/${f#iso/airootfs/}"
         # les .so n'ont pas besoin du bit x (dlopen), on les ignore
-        case "$rel" in *.so|*.so.*) continue ;; esac
+        case "$rel" in
+            *.so|*.so.*) continue ;;
+            # fichiers que clean_profile vient de supprimer de l'arbre
+            /usr/bin/calamares|/usr/bin/bob-fetch|/usr/bin/bobos-install-cli|/usr/bin/neofetch) continue ;;
+            */usr/lib/calamares/*) continue ;;
+        esac
         grep -q "['\"]$rel['\"]" iso/profiledef.sh \
             || { echo "  ✗ $rel n'est pas épinglé (mkarchiso le Passera en 0644 !)"; fail=1; }
     done < <(find iso/airootfs -type f -perm -u+x \

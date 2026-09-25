@@ -1,0 +1,6 @@
+[Unit]
+Description=BobOS — vérifie les mises à jour disponibles
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bobos-update-check

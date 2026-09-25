@@ -29,6 +29,7 @@ choice="$(printf '%s\n' \
     "$FW_STATE" \
     "$KILLER_STATE" \
     "Mises à jour — bob-update" \
+    "Mises à jour — mise à jour graphique" \
     "Infos système — bobfetch" \
     "Snake — jouer" \
     "Énergie — éteindre / redémarrer / veille" | \
@@ -76,7 +77,10 @@ case "$choice" in
         fi
         ;;
     Mises*)
-        kitty -e bob-update
+        case "$choice" in
+            *graphique*) kitty --hold -e bobos-update ;;
+            *)           kitty -e bob-update ;;
+        esac
         ;;
     Infos*)
         kitty -e bobfetch

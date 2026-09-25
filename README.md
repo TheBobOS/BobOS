@@ -102,6 +102,32 @@ totalité des cas, le problème est la machine virtuelle, pas le PC :
 | **QEMU/KVM** | `-cpu host` ou `-cpu qemu64` (un `-cpu i686`/`pentium3` force le 32 bits). |
 | **PC réel (Lenovo…)** | L'ISO démarre sur **tout** x86-64. Si ça échoue quand même : désactivez *CSM / Legacy Boot* dans le BIOS et rebootez en UEFI, ou à l'inverse expressez le disque en **GPT + UEFI**. |
 
+## Mettre à jour son OS
+
+Trois portes d'entrée, **un seul** moteur de mise à jour (`bob-update`) :
+
+| Où | Comment |
+|---|---|
+| **Clic dans le menu d'applications** | « Mettre à jour BobOS » → menu wofi avec la liste des paquets → confirmation |
+| **Clic sur `⬆ N` dans la barre** | idem (le compteur est actualisé toutes les 5 min) |
+| **Dans Paramètres** | « Mises à jour — mise à jour graphique » |
+| **Terminal** | `bobos-update` (graphique), `bob-update` (interactif), ou `bobos-update --check` (juste le nombre) |
+
+Le système **vérifie tout seul une fois par jour** (minuteur systemd, à 12 h)
+et au démarrage de la session : s'il y a des mises à jour, tu reçois une
+notification et le compteur apparaît dans la barre. Rien n'est installé sans
+ton accord.
+
+La mise à jour elle-même lit les **news Arch** d'abord, met à jour le
+**trousseau de clés** avant les paquets (sinon la MAJ échoue quand Arch change
+ses clés), garde `pacman` interactif, montre les `.pacnew` et cleans le cache
+en gardant 2 versions par paquet (c'est ce qui permet à `bob fixme` de
+revenir en arrière).
+
+> Sur une VM, la disponibilité des MAJ dépend du réseau : sans réseau,
+> `bobos-update` affiche « tout est à jour » (les bases ne sont pas
+> rafraîchies, rien n'est installé).
+
 ## Dépôt bob-core
 
 À ajouter dans `/etc/pacman.conf` **après** vos dépôts officiels :
