@@ -1,0 +1,10 @@
+// BobOS — wheel peut éteindre / gérer le réseau sans mot de passe
+polkit.addRule(function(action, subject) {
+    if (subject.isInGroup("wheel")) {
+        if (action.id.indexOf("org.freedesktop.login1.") === 0 ||
+            action.id.indexOf("org.freedesktop.NetworkManager.") === 0) {
+            return polkit.Result.YES;
+        }
+    }
+    return polkit.Result.NOT_HANDLED;
+});

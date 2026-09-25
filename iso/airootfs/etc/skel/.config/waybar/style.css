@@ -1,0 +1,78 @@
+/* BobOS — waybar */
+* {
+    border: none;
+    border-radius: 0;
+    font-family: sans-serif;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: rgba(17, 17, 24, 0.92);
+    color: #e8e8f0;
+}
+
+#custom-menu {
+    padding: 0 16px;
+    background: #4a6cf7;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+#custom-menu:hover {
+    background: #3b5bdb;
+}
+
+/* Boutons icônes (logos des apps, Papirus) */
+#custom-settings,
+#custom-firefox,
+#custom-files,
+#custom-terminal,
+#custom-power {
+    min-width: 40px;
+    padding: 0 8px;
+    background-size: 22px 22px;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+#custom-settings { background-image: url("/usr/share/icons/Papirus/48x48/apps/preferences-system.svg"); }
+#custom-firefox  { background-image: url("/usr/share/icons/Papirus/48x48/apps/firefox.svg"); }
+#custom-files    { background-image: url("/usr/share/icons/Papirus/48x48/apps/system-file-manager.svg"); }
+#custom-terminal { background-image: url("/usr/share/icons/Papirus/48x48/apps/kitty.svg"); }
+#custom-power    { background-image: url("/usr/share/icons/Papirus/48x48/apps/system-shutdown.svg"); }
+
+#custom-settings:hover,
+#custom-firefox:hover,
+#custom-files:hover,
+#custom-terminal:hover,
+#custom-power:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+}
+
+#clock,
+#cpu,
+#memory,
+#network,
+#battery,
+#tray {
+    padding: 0 12px;
+}
+
+#network.disconnected {
+    color: #ff6b6b;
+    font-weight: bold;
+}
+
+#cpu.warning {
+    color: #f0c674;
+}
+
+#battery.warning {
+    color: #f0c674;
+}
+
+#battery.critical:not(.charging) {
+    color: #ff4444;
+}

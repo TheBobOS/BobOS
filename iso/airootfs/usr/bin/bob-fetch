@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# bob-fetch — télécharge le repo bob-core en cache local
+set -euo pipefail
+
+BOB_REPO_URL="https://bob.xem.yt/os/x86_64"
+BOB_CACHE="/var/cache/bob"
+
+if [[ $EUID -ne 0 ]]; then
+    if command -v doas &>/dev/null; then
+        exec doas "$0" "$@"
+    else
+        exec sudo -E "$0" "$@"
+    fi
+fi
+
+mkdir -p "$BOB_CACHE"
+echo "[bob-fetch] téléchargement du repo bob-core..."
+cd "$BOB_CACHE"
+
+# base de paquets
+curl -fLO "$BOB_REPO_URL/bob-core.db" || {
+    echo "[bob-fetch] impossible de récupérer bob-core.db" >&2
+    exit 1
+}
+
+# tous les paquets bob-* (les petits fichiers custom)
+while IFS= read -r pkg; do
+    [[ -z "$pkg" ]] && continue
+    echo "[bob-fetch] $pkg"
+    curl -fsLO "$BOB_REPO_URL/$pkg" || echo "[bob-fetch] échec : $pkg" >&2
+done < <(curl -fs "$BOB_REPO_URL/" | grep -oP 'href="\K[^"]*bob[^"]*\.pkg\.tar\.zst' || true)
+
+echo "[bob-fetch] fait. Cache : $BOB_CACHE"
+ls -la "$BOB_CACHE"

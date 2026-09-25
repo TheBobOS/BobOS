@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# bob-firewall — wrapper nftables martien
+set -euo pipefail
+
+RULES="/etc/bobos/firewall.nft"
+
+usage() {
+    echo "bob-firewall — pare-feu martien BobOS"
+    echo "usage : bob-firewall on|off|status|reload"
+}
+
+if [[ $EUID -ne 0 ]]; then
+    if command -v doas &>/dev/null; then
+        exec doas "$0" "$@"
+    else
+        exec sudo -E "$0" "$@"
+    fi
+fi
+
+case "${1:-}" in
+    on|start)
+        if [[ ! -f "$RULES" ]]; then
+            echo "[bob-firewall] règles introuvables : $RULES" >&2
+            exit 1
+        fi
+        nft -f "$RULES"
+        echo "[bob-firewall] ON 🔥 — input drop sauf SSH + établi"
+        ;;
+    off|stop)
+        nft flush ruleset
+        echo "[bob-firewall] OFF — tout est ouvert (KEKW)"
+        ;;
+    status)
+        nft list ruleset
+        ;;
+    reload)
+        nft flush ruleset
+        nft -f "$RULES"
+        echo "[bob-firewall] rechargé."
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

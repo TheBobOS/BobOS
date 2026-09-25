@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Paramètres BobOS
+Comment=Écran, réseau, son, système
+Exec=/usr/bin/bobos-settings
+Icon=bobos-settings
+Terminal=false
+Type=Application
+Categories=Settings;System;Utility;
+StartupNotify=false

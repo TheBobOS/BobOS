@@ -1,0 +1,3 @@
+# BobOS — sudo sans mot de passe (comme doas) : aucune boucle possible
+Defaults !lecture_never
+wheel ALL=(ALL:ALL) NOPASSWD: ALL

@@ -1,0 +1,6 @@
+# BobOS — wofi
+show-icons=true
+width=640
+height=480
+prompt=Rechercher une app…
+allow-markup=true

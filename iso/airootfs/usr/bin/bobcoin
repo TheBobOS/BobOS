@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# bobcoin — ledger intergalactique BobOS
+# solde injecté dans le prompt zsh via `bobcoin --prompt`
+set -euo pipefail
+
+LEDGER_DIR="/var/lib/bobcoin"
+LEDGER="$LEDGER_DIR/balance"
+
+ensure_ledger() {
+    doas mkdir -p "$LEDGER_DIR" 2>/dev/null || mkdir -p "$LEDGER_DIR" 2>/dev/null || true
+    if [[ ! -f "$LEDGER" ]]; then
+        echo "1000" > "$LEDGER" 2>/dev/null || echo "1000" > /tmp/bobcoin-balance
+        LEDGER="${LEDGER:-/tmp/bobcoin-balance}"
+    fi
+    doas chmod 666 "$LEDGER" 2>/dev/null || chmod 666 "$LEDGER" 2>/dev/null || true
+}
+
+get_balance() {
+    ensure_ledger
+    cat "$LEDGER" 2>/dev/null || cat /tmp/bobcoin-balance 2>/dev/null || echo "0"
+}
+
+case "${1:-}" in
+    --prompt|-p)
+        bal="$(get_balance)"
+        echo "◈ ${bal} BC"
+        ;;
+    mine|m)
+        # minage passif : +10 BC par invocation
+        bal="$(get_balance)"
+        new=$((bal + 10))
+        echo "$new" > "$LEDGER" 2>/dev/null || echo "$new" > /tmp/bobcoin-balance
+        echo "[bobcoin] tu as miné 10 BC. Solde : $new"
+        ;;
+    send|s)
+        if [[ $# -lt 3 ]]; then
+            echo "usage : bobcoin send <dest> <montant>" >&2
+            exit 1
+        fi
+        dest="$2"; amount="$3"
+        bal="$(get_balance)"
+        if (( amount > bal )); then
+            echo "[bobcoin] solde insuffisant ($bal BC)" >&2
+            exit 1
+        fi
+        new=$((bal - amount))
+        echo "$new" > "$LEDGER" 2>/dev/null || echo "$new" > /tmp/bobcoin-balance
+        echo "[bobcoin] envoyé $amount BC à $dest. Solde : $new"
+        ;;
+    balance|b|"")
+        echo "$(get_balance) BC"
+        ;;
+    *)
+        echo "usage : bobcoin [--prompt|mine|send <dest> <montant>|balance]" >&2
+        exit 1
+        ;;
+esac

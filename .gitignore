@@ -1,0 +1,25 @@
+# Sorties de build — ne jamais pousser
+/out/
+*.iso
+
+# Logs de build
+*.log
+
+# Caches & artefacts de paquets
+*.pkg.tar*
+*.sig
+*.sfs
+*.img
+.cache/
+__pycache__/
+*.pyc
+node_modules/
+
+# Artefacts makepkg
+src/
+pkg/
+
+# Éditeurs / OS
+*.swp
+*~
+.DS_Store

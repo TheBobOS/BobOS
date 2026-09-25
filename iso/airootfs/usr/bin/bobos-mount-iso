@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# bobos-mount-iso — garantit le support ISO monté à /run/archiso/bootmnt.
+# unpackfs lit arch/x86_64/airootfs.sfs à cet emplacement ; sur du matériel
+# réel (USB, Ventoy) le chemin de montage peut différer (archiso #2068).
+# Exécuté par Calamares (shellprocess@mountiso, dontChroot) avant unpackfs.
+set -u
+
+DST="/run/archiso/bootmnt"
+
+# déjà bon ?
+[ -e "$DST/arch/x86_64/airootfs.sfs" ] && exit 0
+
+# localise le .sfs du live ailleurs
+SFS="$(find /run /mnt /media -name airootfs.sfs -path '*arch*x86_64*' 2>/dev/null | head -n1)"
+if [ -z "$SFS" ]; then
+    SFS="$(find /run /mnt -name airootfs.sfs 2>/dev/null | head -n1)"
+fi
+if [ -z "$SFS" ]; then
+    echo "[bobos-mount-iso] airootfs.sfs introuvable" >&2
+    exit 1
+fi
+
+# racine de l'ISO = parent de /arch/x86_64/airootfs.sfs
+ROOT="${SFS%/arch/x86_64/airootfs.sfs}"
+[ "$ROOT" = "$SFS" ] && ROOT="$(dirname "$(dirname "$(dirname "$SFS")")")"
+
+mkdir -p "$DST"
+mount --bind "$ROOT" "$DST" || exit 1
+
+[ -e "$DST/arch/x86_64/airootfs.sfs" ] || {
+    echo "[bobos-mount-iso] montage fait mais sfs toujours absent ($DST)" >&2
+    exit 1
+}
+echo "[bobos-mount-iso] support ISO monté : $ROOT -> $DST"
+exit 0

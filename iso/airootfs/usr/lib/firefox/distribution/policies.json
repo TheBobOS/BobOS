@@ -1,0 +1,15 @@
+{
+  "policies": {
+    "Homepage": {
+      "URL": "file:///usr/share/bobos/bobcord.html",
+      "StartPage": "homepage",
+      "Locked": false
+    },
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "DontCheckDefaultBrowser": true,
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "DisplayBookmarksToolbar": "always"
+  }
+}

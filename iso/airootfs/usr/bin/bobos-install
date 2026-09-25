@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# bobos-install — installeur graphique BobOS (Calamares), 100% hors-ligne.
+#   bobos-install        → interface graphique (défaut)
+#   bobos-install --cli  → assistant en ligne de commande (repli)
+set -euo pipefail
+
+# Élévation : TOUJOURS tester avant exec.
+# `exec doas ... || exec sudo ...` ne retombe JAMAIS sur sudo : exec remplace
+# le shell, doas refuse, le || n'est jamais évalué → mort silencieuse.
+if [[ $EUID -ne 0 ]]; then
+    if command -v doas >/dev/null 2>&1 && doas true 2>/dev/null; then
+        exec doas "$0" "$@"
+    fi
+    if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        exec sudo -nE "$0" "$@"
+    fi
+    if command -v pkexec >/dev/null 2>&1; then
+        exec pkexec "$0" "$@"
+    fi
+    echo "[install] élévation impossible (doas/sudo/pkexec absents)" >&2
+    exit 1
+fi
+
+if [[ "${1:-}" == "--cli" || "${1:-}" == "-c" ]]; then
+    exec /usr/bin/bobos-install-cli
+fi
+
+if ! command -v calamares >/dev/null 2>&1; then
+    echo "[install] calamares introuvable — repli sur l'installateur CLI" >&2
+    if [[ -t 0 ]]; then
+        exec /usr/bin/bobos-install-cli
+    fi
+    # lancé depuis le bureau (pas de TTY) : un terminal, sinon ça meurt en silence
+    exec kitty -e /usr/bin/bobos-install-cli
+fi
+
+# Qt : Wayland = session Hyprland (doas keepenv / sudo -E conservent l'env).
+# Via pkexec l'env wayland est perdu mais DISPLAY survit → XWayland.
+if [[ -z "${WAYLAND_DISPLAY:-}" && -n "${DISPLAY:-}" ]]; then
+    export QT_QPA_PLATFORM=xcb
+else
+    export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland}"
+fi
+
+echo "[install] lancement de Calamares (log : /tmp/bobos-calamares.log)"
+set +e
+calamares 2>&1 | tee /tmp/bobos-calamares.log
+rc=${PIPESTATUS[0]}
+set -e
+
+if (( rc != 0 )); then
+    echo "[install] Calamares a échoué (rc=$rc) — log : /tmp/bobos-calamares.log" >&2
+    if command -v kitty >/dev/null 2>&1; then
+        kitty --hold -e cat /tmp/bobos-calamares.log &
+    fi
+    exit "$rc"
+fi
+exit 0

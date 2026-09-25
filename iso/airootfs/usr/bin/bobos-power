@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# bobos-power — menu énergie (wofi)
+set -euo pipefail
+
+choice="$(printf '%s\n' "Éteindre" "Redémarrer" "Déconnexion" | \
+    wofi --dmenu --prompt "Énergie")" || exit 0
+
+case "$choice" in
+    Éteindre)    doas systemctl poweroff ;;
+    Redémarrer)  doas systemctl reboot ;;
+    Déconnexion) hyprctl dispatch exit ;;
+esac
+exit 0

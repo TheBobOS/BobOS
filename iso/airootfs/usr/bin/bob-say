@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# bob-say — TTS BobOS qui gueule quand tu touches aux configs
+set -euo pipefail
+
+msg="${*:-BobOS}"
+
+# si on détecte une commande dangereuse, on gueule plus fort
+if echo "$msg" | grep -qE 'rm -rf|rm -fr|mkfs|dd if=|/dev/sd|> */etc/'; then
+    warn="ARRÊTE DE TOUCHER AUX CONFIGS !"
+    echo "‼️  $warn" >&2
+    if command -v espeak-ng &>/dev/null; then
+        espeak-ng -v fr -s 160 -p 20 -a 200 "$warn" 2>/dev/null || true
+    fi
+    if command -v notify-send &>/dev/null; then
+        notify-send -u critical "BobOS" "$warn" 2>/dev/null || true
+    fi
+    exit 1
+fi
+
+echo "🔊 bob-say : $msg"
+if command -v espeak-ng &>/dev/null; then
+    espeak-ng -v fr -s 170 "$msg" 2>/dev/null || true
+else
+    echo "(espeak-ng absent — pas de son)" >&2
+fi

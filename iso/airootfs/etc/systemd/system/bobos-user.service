@@ -1,0 +1,12 @@
+[Unit]
+Description=BobOS — création de l'utilisateur bob
+Before=getty@tty1.service sddm.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/bobos-create-user
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# bobos-target-fixes — s'exécute EN CHROOT dans la cible (shellprocess_fixes).
+# $1 = nom d'utilisateur créé par Calamares.
+#   - initramfs « normal » (retire les hooks archiso du live)
+#   - purge XanMod si le CPU n'a pas AVX2
+#   - mkinitcpio -P
+#   - autologin tty1 → utilisateur installé
+#   - désactive le service live bobos-user (reset de mdp à chaque boot)
+set -euo pipefail
+
+USER_NAME="${1:-}"
+
+echo "[fixes] retrait du hook archiso mkinitcpio..."
+rm -f /etc/mkinitcpio.conf.d/archiso.conf
+
+# Le pacman.conf embarqué par le paquet pacman est celui d'Arch par défaut
+# (core/extra seuls) : on réécrit celui de BobOS sur la cible, sinon le système
+# installé ne verrait ni bob-core (xanmod, p10k…) ni multilib.
+# Ordre des dépôts identique à l'ISO : bob-core EN DERNIER.
+echo "[fixes] écriture de /etc/pacman.conf (repos BobOS)..."
+cat > /etc/pacman.conf <<'PCONF'
+# /etc/pacman.conf — BobOS
+[options]
+HoldPkg           = pacman glibc
+Architecture      = auto
+Color
+ILoveCandy
+CheckSpace
+VerbosePkgLists
+SigLevel          = Required DatabaseOptional
+LocalFileSigLevel = Optional
+ParallelDownloads = 5
+
+[core]
+Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+
+[extra]
+Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+
+[multilib]
+Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch
+
+[bob-core]
+SigLevel = Never
+Server = https://bob.xem.yt/os/x86_64
+PCONF
+
+echo "[fixes] presets des kernels → default + fallback..."
+cat > /etc/mkinitcpio.d/linux.preset <<'PRE'
+PRESETS=('default' 'fallback')
+ALL_kver='/boot/vmlinuz-linux'
+default_image='/boot/initramfs-linux.img'
+fallback_image='/boot/initramfs-linux-fallback.img'
+default_options=''
+fallback_options='-S autodetect'
+PRE
+cat > /etc/mkinitcpio.d/linux-xanmod.preset <<'PRE'
+PRESETS=('default' 'fallback')
+ALL_kver='/boot/vmlinuz-linux-xanmod'
+default_image='/boot/initramfs-linux-xanmod.img'
+fallback_image='/boot/initramfs-linux-xanmod-fallback.img'
+default_options=''
+fallback_options='-S autodetect'
+PRE
+
+# CPU sans AVX2 (pre-2013, ex. HP Pavilion p6) → le noyau XanMod planterait
+# au boot : on le retire, GRUB ne proposera que le kernel stock.
+if [[ -r /proc/cpuinfo ]] && ! grep -qw avx2 /proc/cpuinfo; then
+    echo "[fixes] CPU sans AVX2 → noyau XanMod retiré (kernel stock uniquement)"
+    rm -f /etc/mkinitcpio.d/linux-xanmod.preset \
+          /boot/vmlinuz-linux-xanmod \
+          /boot/initramfs-linux-xanmod.img \
+          /boot/initramfs-linux-xanmod-fallback.img
+    rm -rf /usr/lib/modules/*xanmod* /usr/src/*xanmod*
+fi
+
+# un seul kernel présent ? le preset orphelin ne doit pas casser mkinitcpio -P
+if [[ ! -f /boot/vmlinuz-linux-xanmod ]]; then
+    rm -f /etc/mkinitcpio.d/linux-xanmod.preset
+fi
+if [[ ! -f /boot/vmlinuz-linux ]]; then
+    rm -f /etc/mkinitcpio.d/linux.preset
+fi
+
+echo "[fixes] mkinitcpio -P..."
+mkinitcpio -P
+
+# autologin tty1 → l'utilisateur réellement créé (dropin dit « bob » par défaut)
+if [[ -n "$USER_NAME" && "$USER_NAME" != "bob" ]]; then
+    DROPIN=/etc/systemd/system/getty@tty1.service.d/autologin.conf
+    if [[ -f "$DROPIN" ]]; then
+        echo "[fixes] autologin tty1 → $USER_NAME"
+        sed -i "s/--autologin bob/--autologin ${USER_NAME}/" "$DROPIN"
+    fi
+fi
+
+# le service live (création/reset de l'utilisateur bob) n'a aucun sens sur la
+# cible : il resetterait le mdp choisi à chaque boot → désactivé.
+echo "[fixes] désactivation de bobos-user.service sur la cible..."
+rm -f /etc/systemd/system/multi-user.target.wants/bobos-user.service
+
+echo "[fixes] terminé."

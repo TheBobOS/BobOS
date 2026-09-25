@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Installer BobOS
+Name[fr]=Installer BobOS
+Comment=Installer BobOS sur le disque
+Comment[fr]=Installer BobOS sur le disque
+Exec=/usr/bin/bobos-install
+Icon=bobos-installer
+Terminal=false
+Categories=System;Settings;
+StartupNotify=false

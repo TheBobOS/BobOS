@@ -1,0 +1,32 @@
+# BobOS — yazi (file manager TUI)
+
+[manager]
+ratio = [1, 4, 3]
+sort_by = "natural"
+sort_sensitive = false
+sort_reverse = false
+sort_dir_first = true
+linemode = "size"
+show_hidden = false
+show_symlink = true
+
+[preview]
+max_width = 600
+max_height = 900
+cache_dir = ""
+image_delay = 0
+image_filter = "triangle"
+
+[chooser]
+multi = true
+
+[input]
+origin = "top"
+offset = [0, 1, 50, 4]
+
+[select]
+open_title = "Ouvrir avec..."
+open_open = "Entrée"
+
+[completion]
+max_width = [50, 10]

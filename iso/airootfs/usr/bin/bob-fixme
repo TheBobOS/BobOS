@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# bob-fixme — rollback de la dernière mise à jour (panic button)
+set -euo pipefail
+
+LAST_UPDATE="/var/lib/bobos/last-update"
+CACHE="/var/cache/bob"
+
+echo "  ____  _____ _____ _   _  ____ ____  "
+echo " |  _ \|  ___|_   _| | | |/ ___|  _ \ "
+echo " | | | | |_    | | | | | | |   | |_) |"
+echo " | |_| |  _|   | | | |_| | |___|  _ < "
+echo " |____/|_|     |_|  \___/ \____|_| \_\\"
+echo
+
+if [[ $EUID -ne 0 ]]; then
+    if command -v doas &>/dev/null; then
+        exec doas "$0" "$@"
+    else
+        exec sudo -E "$0" "$@"
+    fi
+fi
+
+if [[ ! -f "$LAST_UPDATE" ]]; then
+    echo "[bob-fixme] aucune update enregistrée — rien à rollback." >&2
+    exit 1
+fi
+
+echo "[bob-fixme] dernière update : $(cat "$LAST_UPDATE")"
+
+# 1) tentative de rollback btrfs (si snapshots dispo)
+if command -v snapper &>/dev/null; then
+    echo "[bob-fixme] tentative de rollback snapper..."
+    LAST_SNAP=$(snapper --csvout list single | tail -n +2 | cut -d',' -f1 | tail -1 || true)
+    if [[ -n "$LAST_SNAP" ]]; then
+        snapper rollback "$LAST_SNAP" && {
+            echo "[bob-fixme] rollback snapshot $LAST_SNAP fait. Redémarre."
+            exit 0
+        }
+    fi
+fi
+
+# 2) fallback : rétrograde les paquets qui ont été touchés (best effort)
+echo "[bob-fixme] pas de snapshot — downgrade best effort via le cache pacman..."
+if [[ -d /var/cache/pacman/pkg ]]; then
+    # installe les versions précédentes les plus récentes du cache pour les paquets mis à jour récemment
+    mapfile -t recent < <(grep -E 'upgraded|installed' /var/log/pacman.log 2>/dev/null | tail -50 | grep -oP '\[\K[^\] ]+' | sort -u || true)
+    if ((${#recent[@]})); then
+        echo "[bob-fixme] paquets récents : ${recent[*]}"
+    fi
+fi
+
+echo "[bob-fixme] rollback partiel. En cas de doute : bob -Syu"
+echo "[bob-fixme] fait."

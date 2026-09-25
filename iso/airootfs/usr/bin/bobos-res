@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# bobos-res — choix MANUEL de la résolution (Paramètres → Écran).
+# Liste les modes disponibles de l'écran actif via hyprctl, applique le choix
+# et le fige : le flag ~/.config/bobos/screen-manual empêche bobos-screen
+# de forcer le mode auto au prochain démarrage.
+set -euo pipefail
+
+FLAG="$HOME/.config/bobos/screen-manual"
+USER_CONF="$HOME/.config/hypr/user.lua"
+
+mons="$(hyprctl monitors -j 2>/dev/null)" || { echo "[bobos-res] Hyprland injoignable" >&2; exit 1; }
+mon="$(echo "$mons" | jq -r '[.[] | select(.focused == true)] | first | .name')"
+[ -n "$mon" ] && [ "$mon" != "null" ] || mon="$(echo "$mons" | jq -r '.[0].name')"
+
+modes="$(echo "$mons" | jq -r --arg m "$mon" '.[] | select(.name == $m) | .availableModes[]?')"
+if [ -z "$modes" ]; then
+    echo "[bobos-res] aucun mode disponible pour $mon" >&2
+    exit 1
+fi
+
+# tri : résolution (pixels) desc, puis Hz desc
+list="$(echo "$modes" | awk '{
+    split($1, r, "x"); split(r[2], hz, "@");
+    px = r[1] * hz[1];
+    hzv = hz[2]; sub(/Hz$/, "", hzv);
+    printf "%012d %08.2f %s\n", px, hzv, $0
+}' | sort -rn | cut -d' ' -f3-)"
+
+current="$(echo "$mons" | jq -r --arg m "$mon" '.[] | select(.name == $m) | "\(.width)x\(.height)@\(.refreshRate)"')"
+
+choice="$(printf '%s\n' "$list" | wofi --dmenu --prompt "Résolution ($mon) — actuel : $current")" || exit 0
+[ -n "$choice" ] || exit 0
+
+# "1920x1080@240.00Hz" → mode hyprctl "1920x1080@240.00"
+mode="${choice%% *}"
+mode="${mode%Hz}"
+
+hyprctl keyword monitor "$mon,$mode,auto,1" >/dev/null
+
+# fige le choix pour les prochains démarrages (config Lua de Hyprland)
+mkdir -p "$(dirname "$FLAG")" "$(dirname "$USER_CONF")"
+touch "$FLAG"
+tmp="$USER_CONF.tmp"
+if [ -s "$USER_CONF" ]; then
+    grep -vF "output = \"$mon\"" "$USER_CONF" > "$tmp" || true
+else
+    printf '%s\n' '# BobOS — réglages écran persos (généré par bobos-res)' > "$tmp"
+fi
+printf 'hl.monitor({ output = "%s", mode = "%s", position = "auto", scale = 1 })\n' "$mon" "$mode" >> "$tmp"
+mv "$tmp" "$USER_CONF"
+
+echo "[bobos-res] $mon → $mode (figé dans $USER_CONF)"
+exit 0

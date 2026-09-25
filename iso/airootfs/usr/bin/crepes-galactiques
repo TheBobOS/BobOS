@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# crepes-galactiques — le paquet le plus important de bob-core
+set -euo pipefail
+
+cat <<'EOF'
+      .--.
+     |o_o |     CRÊPES GALACTIQUES
+     |:_/ |     ====================
+    //   \ \    Recette intergalactique de Crêpe Martienne
+   (|     | )   Version 1.0.0 — bob-core
+  /'\_   _/`\   KEKW
+  \___)=(___/
+
+Ingrédients :
+  - 125g de farine d'avoine (importée de Phobos)
+  - 2 œufs martiens (rouge sur rouge)
+  - 30cl de lait de soja (version galactique)
+  - 1 pincée de sel lunaire
+  - 50g de beurre fondu (ou huile d'algue space)
+
+Préparation :
+  1. Mélange farine + œufs + sel
+  2. Verse le lait progressivement, remue jusqu'à lisse
+  3. Laisse reposer 30 min dans l'espace (gravité 0.38g)
+  4. Cuire à feu moyen, retourne quand les bulles arrivent
+  5. Servir avec de la confiture de météores
+
+Bon appétit, Kevin.
+
+~ fin du programme ~
+EOF
+
+exit 0

@@ -1,0 +1,5 @@
+-- BobOS — réglages écran persos (généré par bobos-res)
+-- Ce fichier est optionnel : il surcharge le moniteur défini plus haut.
+-- Ne pas éditer à la main, utiliser Paramètres → Écran.
+-- Exemple :
+-- hl.monitor({ output = "DP-1", mode = "1920x1080@240", position = "auto", scale = 1 })

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# bob-martian-eq — applique le preset EasyEffects "mode martien"
+set -euo pipefail
+
+PRESET_SRC="/usr/share/bobos/easyeffects/martian.json"
+PRESET_DIR="$HOME/.config/easyeffects/input"
+
+usage() {
+    echo "bob-martian-eq — equalizer pré-réglé 'mode martien'"
+    echo "usage : bob-martian-eq on|off|status"
+}
+
+mkdir -p "$PRESET_DIR"
+
+case "${1:-}" in
+    on|apply)
+        cp "$PRESET_SRC" "$PRESET_DIR/martian.json"
+        # charge le preset dans easyeffects s'il tourne
+        if pgrep -x easyeffects &>/dev/null; then
+            easyeffects -p martian 2>/dev/null || true
+        fi
+        echo "[bob-martian-eq] mode martien ON 🔊 (preset appliqué, relance EasyEffects si besoin)"
+        ;;
+    off)
+        rm -f "$PRESET_DIR/martian.json"
+        if pgrep -x easyeffects &>/dev/null; then
+            easyeffects -p "" 2>/dev/null || true
+        fi
+        echo "[bob-martian-eq] mode martien OFF"
+        ;;
+    status)
+        if [[ -f "$PRESET_DIR/martian.json" ]]; then
+            echo "[bob-martian-eq] mode martien actif."
+        else
+            echo "[bob-martian-eq] mode martien inactif."
+        fi
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

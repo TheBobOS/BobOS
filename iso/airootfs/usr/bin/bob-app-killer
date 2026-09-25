@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# bob-app-killer — ferme Steam/Discord/Spotify/OBS/FF si pas de minage dans l'heure
+set -euo pipefail
+
+MINE_FILE="/var/lib/bobcoin/last-mine"
+APPS=(steam Steam discord Discord spotify Spotify obs OBS firefox Firefox)
+
+# timestamp du dernier minage (0 si jamais)
+last_mine="$(cat "$MINE_FILE" 2>/dev/null || echo 0)"
+now="$(date +%s)"
+age=$((now - last_mine))
+
+if (( age < 3600 )); then
+    echo "[bob-app-killer] minage récent (${age}s) — rien à tuer."
+    exit 0
+fi
+
+echo "[bob-app-killer] pas de minage depuis ${age}s — purge."
+killed=0
+for app in "${APPS[@]}"; do
+    if pgrep -x "$app" &>/dev/null; then
+        pkill -x "$app" && echo "[bob-app-killer] fermé : $app"
+        killed=1
+    fi
+done
+
+if (( killed == 0 )); then
+    echo "[bob-app-killer] aucune app à fermer. La garde martienne est vigilant.e."
+fi
+
+exit 0

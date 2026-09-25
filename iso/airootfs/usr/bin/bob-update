@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# bob-update — mise à jour BobOS (pacman + repos custom)
+set -euo pipefail
+
+echo "=============================="
+echo "   bob-update — BobOS"
+echo "=============================="
+
+if [[ $EUID -ne 0 ]]; then
+    if command -v doas &>/dev/null; then
+        exec doas "$0" "$@"
+    else
+        exec sudo -E "$0" "$@"
+    fi
+fi
+
+# snapshot avant update (si btrfs/snapshots dispo)
+mkdir -p /var/lib/bobos
+echo "$(date -u +%FT%TZ)" > /var/lib/bobos/last-update
+echo "[bob-update] dernière update : $(cat /var/lib/bobos/last-update)"
+echo "[bob-update] en cas de galère : bob fixme"
+echo
+
+pacman -Syu --noconfirm
+echo
+echo "[bob-update] Terminé. KEKW"

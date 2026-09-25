@@ -1,0 +1,52 @@
+{
+  "output": {},
+  "input": {
+    "blocklist": [],
+    "bypass": false,
+    "gain": 0.0,
+    "input-device": "default",
+    "use-default-input-device": true,
+    "plugin-order": [
+      "rnnoise#0",
+      "equalizer#0",
+      "pitch#0"
+    ],
+    "rnnoise#0": {
+      "bypass": false,
+      "enable-vad": true,
+      "model-path": "",
+      "release": 20,
+      "vad-thres": 50.0,
+      "wet": 0.0
+    },
+    "equalizer#0": {
+      "bypass": false,
+      "balance": 0.0,
+      "band0": { "type": "Bell", "frequency": 60.0, "width": 0.2, "gain": 12.0, "quality": 1.0 },
+      "band1": { "type": "Bell", "frequency": 120.0, "width": 0.2, "gain": 9.0, "quality": 1.0 },
+      "band2": { "type": "Bell", "frequency": 240.0, "width": 0.3, "gain": 6.0, "quality": 1.0 },
+      "band3": { "type": "Bell", "frequency": 1000.0, "width": 0.3, "gain": -3.0, "quality": 1.0 },
+      "band4": { "type": "Bell", "frequency": 3000.0, "width": 0.3, "gain": -5.0, "quality": 1.0 },
+      "band5": { "type": "Bell", "frequency": 8000.0, "width": 0.2, "gain": 2.0, "quality": 1.0 },
+      "input-gain": 0.0,
+      "mode": "IIR",
+      "num-bands": 6,
+      "output-gain": 0.0,
+      "split-channels": false
+    },
+    "pitch#0": {
+      "bypass": false,
+      "cents": -700.0,
+      "formant": "female",
+      "frametime": 10.0,
+      "input-gain": 0.0,
+      "output-gain": 0.0,
+      "pitch": -1.0,
+      "preservation-formant": false,
+      "preservation-scales": "time",
+      "stereo-width": 1.0,
+      "tempo": 1.0,
+      "wet": 100.0
+    }
+  }
+}

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# bobos-screen — écran sur le mode max (résolution + rafraîchissement)
+# + tentative de forçage 1080p si l'EDID donne des modes trop bas (stretched)
+set -u
+
+# choix manuel conservé (bobos-res) : on ne touche à rien
+if [ -f "$HOME/.config/bobos/screen-manual" ]; then
+    exit 0
+fi
+
+# En VM : force 1920x1080 (virt-viewer auto-scale → flou sinon)
+if systemd-detect-virt -q 2>/dev/null; then
+    hyprctl keyword monitor ",1920x1080@60,auto,1" >/dev/null 2>&1
+    exit 0
+fi
+
+# attendre que Hyprland expose les outputs
+mons=""
+for _ in $(seq 1 15); do
+    mons="$(hyprctl monitors -j 2>/dev/null)" && break
+    sleep 1
+done
+[ -n "$mons" ] || exit 0
+
+echo "$mons" | jq -c '.[]' | while read -r mon; do
+    name="$(echo "$mon" | jq -r '.name')"
+
+    # meilleur mode listé : plus gros en pixels, puis plus haut Hz dessus
+    read -r best best_px <<EOF
+$(echo "$mon" | jq -r '
+    [.availableModes[]?
+     | capture("(?<w>[0-9]+)x(?<h>[0-9]+)@(?<hz>[0-9.]+)Hz")
+     | {px: ((.w|tonumber) * (.h|tonumber)), hz: (.hz|tonumber),
+        mode: (.w + "x" + .h + "@" + .hz)}]
+    | sort_by(.px, .hz) | last
+    | if . == null then " " else "\(.mode) \(.px)" end') 
+EOF
+    [ -n "${best:-}" ] || continue
+
+    if [ "${best_px:-0}" -lt $((1920 * 1080)) ]; then
+        # l'EDID est capricieux (VGA souvent) → on TENTE du plus grand au plus petit
+        applied=""
+        for cand in 1920x1080@60 1600x900@60 1366x768@60; do
+            hyprctl keyword monitor "$name,$cand,auto,1" >/dev/null 2>&1
+            sleep 1
+            want_w="${cand%%x*}"
+            got_w="$(hyprctl monitors -j 2>/dev/null \
+                | jq -r --arg n "$name" '.[] | select(.name==$n) | .width')"
+            if [ -n "$got_w" ] && [ "$got_w" -ge "$want_w" ] 2>/dev/null; then
+                applied=1
+                break
+            fi
+        done
+        # dernier recours : au moins le max listé par le driver
+        if [ -z "$applied" ]; then
+            hyprctl keyword monitor "$name,$best,auto,1" >/dev/null 2>&1
+        fi
+    else
+        hyprctl keyword monitor "$name,$best,auto,1" >/dev/null 2>&1
+    fi
+done
+exit 0

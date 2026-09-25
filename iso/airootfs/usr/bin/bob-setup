@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# bob-setup — wizard du premier boot BobOS
+# Plus de question : la stack dev (Python, Node, Bun, Docker) est préinstallée
+# dans l'ISO — rien à télécharger, ça marche aussi hors-ligne.
+set -euo pipefail
+
+MARKER="$HOME/.config/bobos/setup-done"
+mkdir -p "$(dirname "$MARKER")"
+
+echo "=========================================="
+echo "   Bienvenue sur BobOS — premier setup"
+echo "=========================================="
+echo
+echo "[bob-setup] Stack dev embarquée :"
+python --version 2>/dev/null | sed 's/^/    /' || echo "    (python absent)"
+node --version 2>/dev/null | sed 's/^/    /' || echo "    (node absent)"
+bun --version 2>/dev/null | sed 's/^/    /' || echo "    (bun absent)"
+docker --version 2>/dev/null | sed 's/^/    /' || echo "    (docker absent)"
+echo
+echo "[bob-setup] Profil BobOS configuré. Amuse-toi bien."
+echo "[bob-setup] Astuce : bob -S crepes-galactiques"
+echo
+
+date -u +%FT%TZ > "$MARKER"
+exit 0

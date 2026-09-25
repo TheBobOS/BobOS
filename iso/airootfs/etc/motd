@@ -1,0 +1,14 @@
+Bienvenue sur BobOS — l'OS de l'espace.
+
+Commandes utiles :
+  bob             wrapper pacman (bob -S crepes-galactiques)
+  bob-update      mise à jour BobOS
+  bob-fetch       télécharge le repo bob-core
+  bob fixme       rollback de la dernière update (panic button)
+  bob dotfiles apply
+  bob-setup       wizard du premier boot
+  bobcoin         solde BobCoin
+  bob-firewall    pare-feu martien
+  bob-say         TTS BobOS
+
+KEKW

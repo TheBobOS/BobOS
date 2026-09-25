@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# bobos-splash — écran de boot BOBOS (art figlet) + KEKW clignotant
+set -euo pipefail
+
+DURATION="${1:-4}"
+END=$(( $(date +%s) + DURATION ))
+
+# Art généré par figlet (fonte big) — jamais dessiné à la main.
+# Fontdir Arch : /usr/share/figlet/fonts (confirmé par figlist).
+FIGLET_FONT="/usr/share/figlet/fonts/big.flf"
+BOBOS="$(figlet -f "$FIGLET_FONT" BOBOS 2>/dev/null \
+      || figlet -f big BOBOS 2>/dev/null \
+      || figlet BOBOS 2>/dev/null \
+      || echo BOBOS)"
+
+while (( $(date +%s) < END )); do
+    clear
+    printf '%s\n' "$BOBOS"
+    printf '     \e[1;31mK E K W\e[0m'
+    sleep 0.5
+    clear
+    printf '%s\n' "$BOBOS"
+    printf '               '
+    sleep 0.5
+done
+clear

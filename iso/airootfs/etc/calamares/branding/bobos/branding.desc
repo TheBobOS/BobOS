@@ -1,0 +1,39 @@
+componentName: bobos
+
+welcomeStyleCalamares: false
+
+welcomeExpandingLogo: true
+
+windowExpanding: noexpand
+
+windowSize: 1024px,720px
+
+windowPlacement: center
+
+sidebar: widget
+
+navigation: widget
+
+strings:
+    productName:         BobOS
+    shortProductName:    BobOS
+    version:             2026.09.22
+    shortVersion:        2026.09.22
+    versionedName:       BobOS 2026.09.22
+    shortVersionedName:  BobOS 2026.09.22
+    bootloaderEntryName: BobOS
+
+images:
+    productLogo:         "bobos-logo.svg"
+    productIcon:         "bobos-logo.svg"
+    productWelcome:      "bobos-logo.svg"
+
+slideshowAPI: 2
+
+style:
+   SidebarBackground:        "#0d0e22"
+   SidebarText:              "#f5f6f7"
+   SidebarTextCurrent:       "#0d0e22"
+   SidebarBackgroundCurrent: "#00ffcc"
+
+slideshow:               "show.qml"

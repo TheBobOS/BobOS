@@ -1,0 +1,130 @@
+# Base
+base
+base-devel
+linux-firmware
+mkinitcpio
+mkinitcpio-archiso
+mkinitcpio-nfs-utils
+nano
+git
+curl
+wget
+rsync
+squashfs-tools
+openssh
+networkmanager
+vim
+less
+
+# Boot
+linux-xanmod
+linux-xanmod-headers
+linux
+refind
+syslinux
+memtest86+
+memtest86+-efi
+edk2-shell
+grub
+
+# WM / Wayland
+hyprland
+xorg-xwayland
+kitty
+wayland
+wayland-protocols
+waybar
+wofi
+network-manager-applet
+qt6ct
+wl-clipboard
+eza
+bat
+papirus-icon-theme
+librsvg
+thunar
+polkit
+polkit-gnome
+
+# GPU (NVIDIA + AMDGPU préchargés)
+mesa
+xf86-video-amdgpu
+vulkan-radeon
+nvidia-open
+nvidia-utils
+lib32-mesa
+lib32-vulkan-radeon
+lib32-nvidia-utils
+
+# Son
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+easyeffects
+
+# Shell
+zsh
+zsh-theme-powerlevel10k-git
+zsh-completions
+fzf
+
+# Navigation fichiers
+yazi
+
+# Sécurité
+opendoas
+sudo
+nftables
+
+# Vieux GPU : accélération vidéo (VA-API Intel classique + Mesa)
+libva-intel-driver
+libva-mesa-driver
+
+# Apps préinstallées
+firefox
+code
+obs-studio
+mpv
+discord
+steam
+okular
+kate
+
+# Consoles / outils
+fastfetch
+htop
+cmatrix
+efibootmgr
+
+# Dev tools (préinstallés — bob-setup ne demande plus rien)
+python
+python-pip
+nodejs
+bun
+docker
+docker-compose
+figlet
+
+# Installeur (Calamares, compilé au build — dépendances runtime)
+kcoreaddons
+kpmcore
+libpwquality
+qt6-declarative
+qt6-svg
+qt6-wayland
+yaml-cpp
+
+# Outils BobOS
+jq
+ydotool
+espeak-ng
+p7zip
+unzip
+which
+smartmontools
+parted
+gptfdisk
+btrfs-progs
+dosfstools
+e2fsprogs

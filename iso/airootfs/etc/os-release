@@ -1,0 +1,9 @@
+NAME="BobOS"
+PRETTY_NAME="BobOS"
+ID=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;0;255;204"
+HOME_URL="https://bob.xem.yt/"
+DOCUMENTATION_URL="https://bob.xem.yt/"
+SUPPORT_URL="https://bob.xem.yt/"
+BUG_REPORT_URL="https://bob.xem.yt/"

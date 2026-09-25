@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# BobOS — crée l'utilisateur bob (mot de passe : bob) au premier boot
+set -euo pipefail
+
+if ! id bob &>/dev/null; then
+    useradd -m -G wheel,audio,video,network,storage,users -s /usr/bin/zsh bob 2>/dev/null \
+        || useradd -m -s /usr/bin/zsh bob
+fi
+
+# Toujours (re)appliquer les mots de passe — un compte créé sans ça
+# reste verrouillé → sudo/doas tournent en boucle pour toujours.
+echo 'bob:bob' | chpasswd
+echo 'root:bob' | chpasswd 2>/dev/null || true
+usermod -aG wheel bob 2>/dev/null || true
+
+# dotfiles depuis /etc/skel (useradd -m les copie déjà)
+chown -R bob:bob /home/bob
+
+exit 0

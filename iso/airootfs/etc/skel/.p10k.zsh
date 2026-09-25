@@ -1,0 +1,17 @@
+# BobOS — configuration Powerlevel10k
+typeset -g POWERLEVEL9K_MODE=nerdfont-v3
+typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR=''
+typeset -g POWERLEVEL9K_RIGHT_SEGMENT_SEPARATOR=''
+typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
+typeset -g POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND='#ffff00'
+typeset -g POWERLEVEL9K_DIR_FOREGROUND='#ff00ff'
+typeset -g POWERLEVEL9K_VCS_FOREGROUND='#00ff00'
+typeset -g POWERLEVEL9K_TIME_FOREGROUND='#888888'
+typeset -g POWERLEVEL9K_TIME_FORMAT='%D{%H:%M:%S}'
+
+typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
+  dir vcs newline
+)
+typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
+  status background_jobs time
+)

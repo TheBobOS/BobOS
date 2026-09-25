@@ -1,0 +1,40 @@
+#!/usr/sbin/nft -f
+# BobOS — pare-feu martien
+# input drop sauf port 22 (SSH) + connexions établies + DNS/DHCP
+
+flush ruleset
+
+table inet bobos {
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        # connexions établies / relatees
+        ct state established,related accept
+
+        # loopback
+        iif "lo" accept
+
+        # SSH
+        tcp dport 22 accept
+
+        # DNS + DHCP (sinon pas de réseau)
+        udp dport 53 accept
+        tcp dport 53 accept
+        udp dport 67,68 accept
+
+        # ICMP limité (ping)
+        ip protocol icmp limit rate 5/second accept
+        ip6 nexthdr icmpv6 limit rate 5/second accept
+
+        # todo : martien
+        counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+    }
+}

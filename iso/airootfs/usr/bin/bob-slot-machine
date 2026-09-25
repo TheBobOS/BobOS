@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# bob-slot-machine — machine à sous martienne KEKW (jackpot bobcoin)
+set -euo pipefail
+
+BAL_FILE="/var/lib/bobcoin/balance"
+[[ -f "$BAL_FILE" ]] || BAL_FILE="/tmp/bobcoin-balance"
+bal="$(cat "$BAL_FILE" 2>/dev/null || echo 1000)"
+
+sym=("🪐" "👾" "👽" "🛸" "☄️" "KEKW")
+cost=10
+
+clear
+echo "╔══════════════════════════════════════╗"
+echo "║   🎰 MACHINE À SOUS MARTIENNE 🎰     ║"
+echo "╠══════════════════════════════════════╣"
+echo "║  Solde : ${bal} BC                      ║"
+echo "╚══════════════════════════════════════╝"
+echo
+
+if (( bal < cost )); then
+    echo "Solde insuffisant pour jouer (min ${cost} BC). Bobcoin mine : bobcoin mine"
+    exit 1
+fi
+
+# débit
+bal=$((bal - cost))
+
+spin() {
+    echo -n "  [ "
+    for _ in 1 2 3; do
+        for _ in 1 2 3; do
+            printf "\r  [ %s %s %s ] " "${sym[$((RANDOM % 6))]}" "${sym[$((RANDOM % 6))]}" "${sym[$((RANDOM % 6))]}"
+            sleep 0.08
+        done
+        echo -n "${sym[$((RANDOM % 6))]} "
+    done
+    echo
+}
+
+a="${sym[$((RANDOM % 6))]}"
+b="${sym[$((RANDOM % 6))]}"
+c="${sym[$((RANDOM % 6))]}"
+
+echo "  Roulement..."
+sleep 0.5
+echo
+echo "  ┌─────────┬─────────┬─────────┐"
+printf "  │   %s   │   %s   │   %s   │\n" "$a" "$b" "$c"
+echo "  └─────────┴─────────┴─────────┘"
+echo
+
+if [[ "$a" == "$b" && "$b" == "$c" ]]; then
+    if [[ "$a" == "KEKW" ]]; then
+        prize=500
+        echo "🎰 JACKPOT KEKW !!! +${prize} BC"
+    else
+        prize=100
+        echo "🎉 TROIS MARTIENS !!! +${prize} BC"
+    fi
+    bal=$((bal + prize))
+elif [[ "$a" == "$b" || "$b" == "$c" || "$a" == "$c" ]]; then
+    prize=20
+    echo "✨ Une paire ! +${prize} BC"
+    bal=$((bal + prize))
+else
+    echo "💀 Perdu... (-${cost} BC)"
+fi
+
+echo "$bal" > "$BAL_FILE" 2>/dev/null || echo "$bal" > /tmp/bobcoin-balance
+echo
+echo "Nouveau solde : ${bal} BC"
+echo "Rejouer : bob-slot-machine"

@@ -1,0 +1,19 @@
+# Maintainer: RicPC <bob@bob.xem.yt>
+pkgname=bob
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Wrapper pacman de BobOS — sous-commandes bob-update, bob-fetch, bob dotfiles, bob fixme (rollback)"
+arch=('any')
+url="https://bob.xem.yt/"
+license=('GPL3')
+depends=('bash' 'pacman' 'coreutils' 'findutils' 'rsync')
+optdepends=('snapper: rollback btrfs pour bob fixme')
+source=('bob' 'bob-update' 'bob-fetch' 'bob-fixme')
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  install -Dm755 "$srcdir/bob"        "$pkgdir/usr/bin/bob"
+  install -Dm755 "$srcdir/bob-update" "$pkgdir/usr/bin/bob-update"
+  install -Dm755 "$srcdir/bob-fetch"  "$pkgdir/usr/bin/bob-fetch"
+  install -Dm755 "$srcdir/bob-fixme"  "$pkgdir/usr/bin/bob-fixme"
+}

@@ -1,0 +1,38 @@
+/* BobOS — wofi */
+window#window {
+    background-color: rgba(17, 17, 24, 0.96);
+    border: 2px solid #4a6cf7;
+    border-radius: 12px;
+}
+
+#input {
+    margin: 10px;
+    padding: 10px 14px;
+    background-color: #1e1e2e;
+    color: #e8e8f0;
+    border: 1px solid #3a3a4c;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+#inner-box {
+    margin: 0 10px 10px 10px;
+}
+
+#entry {
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+#entry:selected {
+    background-color: #4a6cf7;
+}
+
+#text {
+    color: #e8e8f0;
+    font-size: 15px;
+}
+
+image {
+    margin-right: 12px;
+}

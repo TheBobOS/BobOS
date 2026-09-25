@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# bobos-settings — panneau paramètres BobOS (menu wofi)
+set -euo pipefail
+
+choice="$(printf '%s\n' \
+    "Écran — choisir la résolution…" \
+    "Écran — mode auto (résolution et Hz max)" \
+    "Réseau — nmtui" \
+    "Son — EasyEffects" \
+    "Mises à jour — bob-update" \
+    "Infos système — fastfetch" \
+    "Énergie — éteindre / redémarrer" | \
+    wofi --dmenu --prompt "Paramètres")" || exit 0
+
+case "$choice" in
+    *choisir*)         bobos-res ;;
+    Écran*)            rm -f "$HOME/.config/bobos/screen-manual"; bobos-screen ;;
+    Réseau*)           kitty -e nmtui ;;
+    Son*)              easyeffects >/dev/null 2>&1 & ;;
+    Mises*)            kitty -e bob-update ;;
+    Infos*)            kitty -e fastfetch ;;
+    Énergie*)          bobos-power ;;
+esac
+exit 0

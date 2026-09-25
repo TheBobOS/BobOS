@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# bobos-install-cli — assistant en ligne de commande (repli de bobos-install).
+# Clone le système live en cours d'exécution sur le disque cible,
+# repartitionne, installe le bootloader. 100% hors-ligne.
+set -euo pipefail
+trap 'echo "[install] ÉCHEC : $BASH_COMMAND" >&2' ERR
+
+if [[ $EUID -ne 0 ]]; then
+    exec doas "$0" "$@" 2>/dev/null || exec sudo -E "$0" "$@"
+fi
+
+echo "=========================================="
+echo "   BobOS — Installation sur disque (CLI)"
+echo "=========================================="
+echo "Méthode : clone du système live (100% hors-ligne)."
+echo "⚠ TOUTES les données du disque cible seront EFFACÉES."
+echo
+
+echo "Disques disponibles :"
+lsblk -d -n -o NAME,SIZE,TYPE,MODEL | awk '$3 == "disk" {printf "  %-10s %6s  %s\n", $1, $2, substr($0, index($0, $4))}'
+echo
+read -r -p "Disque cible (ex: sda, vda, nvme0n1) : " TARGET
+TARGET="${TARGET#/dev/}"
+DISK="/dev/$TARGET"
+[[ -b "$DISK" ]] || { echo "[install] $DISK introuvable." >&2; exit 1; }
+
+# refus si le disque contient l'ISO en cours d'exécution
+if lsblk -nrno MOUNTPOINT "$DISK" | grep -q '^/run/archiso'; then
+    echo "[install] refus : ce disque contient l'ISO en cours d'exécution." >&2
+    exit 1
+fi
+
+read -r -p "⚠ Effacer TOUT sur $DISK ? Tape EFFACER : " confirm
+[[ "$confirm" == "EFFACER" ]] || { echo "[install] annulé."; exit 0; }
+
+# noms de partitions (nvme/mmcraid => suffixe p)
+case "$TARGET" in
+    *[0-9]) P1="${TARGET}p1"; P2="${TARGET}p2" ;;
+    *)      P1="${TARGET}1";  P2="${TARGET}2"  ;;
+esac
+
+if [[ -d /sys/firmware/efi ]]; then
+    MODE=uefi
+    echo "[install] mode UEFI (GPT, ESP 1Go montée en /boot)"
+    parted -s "$DISK" mklabel gpt
+    parted -s "$DISK" mkpart ESP fat32 1MiB 1025MiB
+    parted -s "$DISK" set 1 esp on
+    parted -s "$DISK" mkpart primary ext4 1025MiB 100%
+    mkfs.vfat -F32 -n BOBOS_ESP "/dev/$P1"
+    ROOTDEV="/dev/$P2"
+else
+    MODE=bios
+    echo "[install] mode BIOS (MBR)"
+    parted -s "$DISK" mklabel msdos
+    parted -s "$DISK" mkpart primary ext4 1MiB 100%
+    parted -s "$DISK" set 1 boot on
+    ROOTDEV="/dev/$P1"
+fi
+mkfs.ext4 -F -L BOBOS "$ROOTDEV"
+sync
+
+echo "[install] montage sous /mnt"
+mount "$ROOTDEV" /mnt
+if [[ "$MODE" == "uefi" ]]; then
+    install -d /mnt/boot
+    mount "/dev/$P1" /mnt/boot
+fi
+
+echo "[install] clone du système live (quelques minutes)..."
+rsync -aHAX --numeric-ids \
+    --exclude='/mnt/*' --exclude='/proc/*' --exclude='/sys/*' \
+    --exclude='/dev/*' --exclude='/run/*' --exclude='/tmp/*' \
+    --exclude='/lost+found' \
+    / /mnt/
+
+# sécurité : les kernels doivent être sur la cible (/boot du live est vide —
+# mkarchiso les extrait dans arch/boot/x86_64/ du support ISO)
+KDIR="/run/archiso/bootmnt/arch/boot/x86_64"
+if [[ ! -d "$KDIR" ]]; then
+    # support monté ailleurs (Ventoy/USB) : on localise le sfs
+    SFS="$(find /run /mnt /media -name airootfs.sfs -path '*arch*x86_64*' 2>/dev/null | head -n1)"
+    [[ -n "$SFS" ]] && KDIR="$(dirname "$(dirname "$(dirname "$SFS")")")/boot/x86_64"
+fi
+for k in vmlinuz-linux vmlinuz-linux-xanmod; do
+    if [[ ! -f "/mnt/boot/$k" ]]; then
+        [[ -f "$KDIR/$k" ]] || { echo "[install] kernel absent : $KDIR/$k" >&2; exit 1; }
+        echo "[install] copie du kernel $k depuis le support ISO..."
+        install -D "$KDIR/$k" "/mnt/boot/$k"
+    fi
+done
+
+# fstab
+ROOTUUID="$(blkid -s UUID -o value "$ROOTDEV")"
+{
+    echo "UUID=$ROOTUUID / ext4 defaults 0 1"
+    if [[ "$MODE" == "uefi" ]]; then
+        echo "UUID=$(blkid -s UUID -o value "/dev/$P1") /boot vfat defaults 0 2"
+    fi
+} > /mnt/etc/fstab
+
+# chroot : initramfs "normal" + bootloader
+echo "$DISK" > /mnt/root/.install-disk
+mount -t proc proc /mnt/proc
+mount --rbind /sys /mnt/sys
+mount --rbind /dev /mnt/dev
+mount --rbind /run /mnt/run
+
+chroot /mnt /bin/bash -e <<'CHROOT'
+# --- initramfs normal (retire les hooks archiso du live) ---
+rm -f /etc/mkinitcpio.conf.d/archiso.conf
+cat > /etc/mkinitcpio.d/linux-xanmod.preset <<'PRE'
+PRESETS=('default' 'fallback')
+ALL_kver='/boot/vmlinuz-linux-xanmod'
+default_image='/boot/initramfs-linux-xanmod.img'
+fallback_image='/boot/initramfs-linux-xanmod-fallback.img'
+default_options=''
+fallback_options='-S autodetect'
+PRE
+cat > /etc/mkinitcpio.d/linux.preset <<'PRE'
+PRESETS=('default' 'fallback')
+ALL_kver='/boot/vmlinuz-linux'
+default_image='/boot/initramfs-linux.img'
+fallback_image='/boot/initramfs-linux-fallback.img'
+default_options=''
+fallback_options='-S autodetect'
+PRE
+# CPU sans AVX2 (pre-2013) → le noyau XanMod planterait au boot :
+# on le retire, GRUB ne proposera que le kernel qui marche.
+if [[ -r /proc/cpuinfo ]] && ! grep -qw avx2 /proc/cpuinfo; then
+    echo "[bobos-install] CPU sans AVX2 → noyau XanMod retiré (kernel stock uniquement)"
+    rm -f /etc/mkinitcpio.d/linux-xanmod.preset \
+          /boot/vmlinuz-linux-xanmod \
+          /boot/initramfs-linux-xanmod.img \
+          /boot/initramfs-linux-xanmod-fallback.img
+    rm -rf /usr/lib/modules/*xanmod* /usr/src/*xanmod*
+fi
+mkinitcpio -P
+
+DISK="$(cat /root/.install-disk)"
+
+if [[ -d /sys/firmware/efi ]]; then
+    # rEFInd : ESP en /boot (vfat) → kernels lisibles sans driver ext4.
+    # --yes : pas de prompt (sinon il boufferait ce script au clavier).
+    refind-install --yes
+    RefindEfi="$(find /boot/EFI \( -name 'refind_x64.efi' -o -name 'refind.efi' \) 2>/dev/null | head -1)"
+    if [[ -z "$RefindEfi" ]]; then
+        echo "[install] ERREUR : binaire rEFInd introuvable après refind-install" >&2
+        exit 1
+    fi
+    # fallback EFI/BOOT/BOOTX64.EFI : boot garanti sans entrée NVRAM
+    # (VM, PC neuf, Clear CMOS)
+    install -d /boot/EFI/BOOT
+    cp -f "$RefindEfi" /boot/EFI/BOOT/BOOTX64.EFI
+    if grep -qE '^[[:space:]]*timeout ' /boot/EFI/refind/refind.conf; then
+        sed -i -E 's/^[[:space:]]*timeout .*/timeout 5/' /boot/EFI/refind/refind.conf
+    else
+        echo 'timeout 5' >> /boot/EFI/refind/refind.conf
+    fi
+else
+    # rEFInd n'existe pas en BIOS → GRUB (MBR)
+    grub-install --target=i386-pc --recheck "$DISK"
+    grub-mkconfig -o /boot/grub/grub.cfg
+fi
+
+rm -f /root/.install-disk
+CHROOT
+
+# --- vérification : le disque est-il vraiment bootable ? ---
+BOOT_ERR=""
+[[ -f /mnt/boot/initramfs-linux.img || -f /mnt/boot/initramfs-linux-xanmod.img ]] \
+    || BOOT_ERR="initramfs absent"
+if [[ "$MODE" == "uefi" && -z "$BOOT_ERR" ]]; then
+    [[ -f /mnt/boot/EFI/BOOT/BOOTX64.EFI ]] || BOOT_ERR="fallback EFI/BOOT/BOOTX64.EFI absent"
+fi
+if [[ "$MODE" == "bios" && -z "$BOOT_ERR" ]]; then
+    [[ -s /mnt/boot/grub/i386-pc/core.img ]] || BOOT_ERR="grub core.img absent"
+    if [[ -z "$BOOT_ERR" ]]; then
+        [[ "$(od -An -tx1 -j510 -N2 "$DISK" | tr -d ' \n')" == "55aa" ]] \
+            || BOOT_ERR="signature MBR 55aa absente"
+    fi
+    if [[ -z "$BOOT_ERR" ]]; then
+        [[ "$(od -An -tx1 -N1 "$DISK" | tr -d ' \n')" != "00" ]] \
+            || BOOT_ERR="code de démarrage MBR vide (grub-install n'a rien écrit)"
+    fi
+fi
+
+if [[ -n "$BOOT_ERR" ]]; then
+    echo "[install] ERREUR : disque NON bootable — $BOOT_ERR" >&2
+    umount -R /mnt 2>/dev/null || umount -R -l /mnt 2>/dev/null || true
+    exit 1
+fi
+
+sync
+umount -R /mnt 2>/dev/null || umount -R -l /mnt
+
+echo
+echo "=========================================="
+echo "  Installation terminée — disque bootable ✓"
+echo "=========================================="
+echo "Disque $DISK (mode $MODE) :"
+lsblk -o NAME,SIZE,FSTYPE,LABEL "$DISK"
+echo
+echo "Dans VMM :"
+echo "  1. Détails → Boot options → « Disque dur » en 1er, CD-ROM décoché"
+echo "     (« Boot failed: not a bootable disk » = lecteur CD vide testé"
+echo "      en premier, ou disque virtuel différent de celui installé)"
+echo "  2. Débranche l'ISO (clic droit lecteur CD → Supprimer)"
+echo "  3. Redémarre — login : bob / mdp : bob"

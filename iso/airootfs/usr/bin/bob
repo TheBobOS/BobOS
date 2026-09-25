@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# bob — wrapper pacman de BobOS
+set -euo pipefail
+
+BOB_REPO_URL="https://bob.xem.yt/os/x86_64"
+BOB_CACHE="/var/cache/bob"
+
+usage() {
+    cat <<'EOF'
+bob — wrapper pacman de BobOS
+
+usage :
+  bob -S <paquet>     installe un paquet (repo bob-core compris)
+  bob -Syy            resynchronise les bases
+  bob -Q              liste les paquets installés
+  bob -Ss <mot>       cherche un paquet
+  bob update          alias de bob-update
+  bob fetch           alias de bob-fetch
+  bob fixme           rollback de la dernière mise à jour
+  bob dotfiles apply  applique les dotfiles BobOS
+  bob fetch           télécharge le repo bob-core en cache local
+EOF
+}
+
+require_root() {
+    if [[ $EUID -ne 0 ]]; then
+        if command -v doas &>/dev/null; then
+            exec doas "$0" "$@"
+        else
+            exec sudo -E "$0" "$@"
+        fi
+    fi
+}
+
+cmd="${1:-}"
+
+case "$cmd" in
+    update)
+        exec /usr/bin/bob-update ;;
+    fetch)
+        exec /usr/bin/bob-fetch ;;
+    fixme)
+        exec /usr/bin/bob-fixme ;;
+    dotfiles)
+        sub="${2:-}"
+        if [[ "$sub" == "apply" ]]; then
+            tgt_user="${SUDO_USER:-${DOAS_USER:-$USER}}"
+            tgt_home="${BOB_TGT_HOME:-$(getent passwd "$tgt_user" | cut -d: -f6)}"
+            BOB_TGT_HOME="$tgt_home" require_root "$@"
+            rsync -a --no-o --no-g /etc/skel/ "$tgt_home"/
+            chown -R "$(id -u):$(id -g)" "$tgt_home" 2>/dev/null || true
+            echo "Dotfiles BobOS appliqués dans $tgt_home. Redémarre ton shell."
+        else
+            echo "usage : bob dotfiles apply" >&2
+            exit 1
+        fi
+        ;;
+    -h|--help|help|"")
+        usage ;;
+    *)
+        # tout le reste est passé tel quel à pacman
+        require_root "$@"
+        exec pacman "$@"
+        ;;
+esac

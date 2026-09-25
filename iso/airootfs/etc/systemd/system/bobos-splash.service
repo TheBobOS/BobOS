@@ -1,0 +1,15 @@
+[Unit]
+Description=BobOS — splash BOBOS (figlet) + KEKW clignotant
+DefaultDependencies=no
+After=systemd-user-sessions.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/bobos-splash 4
+StandardInput=tty
+StandardOutput=tty
+RemainAfterExit=no
+
+[Install]
+WantedBy=getty@tty1.service

@@ -1,0 +1,79 @@
+# Maintainer: BobOS
+# Calamares n'est pas dans les repos officiels d'Arch → compilation maison.
+# Source = release officielle Codeberg (base : AUR calamares).
+pkgname=calamares
+pkgver=3.4.3
+pkgrel=1
+pkgdesc="Distribution-independent installer framework"
+url="https://codeberg.org/Calamares/calamares"
+license=("GPL-3.0-or-later")
+arch=("x86_64")
+
+depends=(
+  'kcoreaddons'
+  'kpmcore'
+  'libpwquality'
+  'qt6-declarative'
+  'qt6-svg'
+  'qt6-wayland'
+  'yaml-cpp'
+)
+makedepends=(
+  'cmake'
+  'extra-cmake-modules'
+  'libglvnd'
+  'ninja'
+  'qt6-base'
+  'qt6-tools'
+  'qt6-translations'
+)
+
+# Tarball à côté du PKGBUILD (téléchargé par build.sh)
+source=("calamares-$pkgver.tar.gz")
+sha256sums=('144cbbf6bdcebfb21685950db4f0777218519df095f62f4aa392f28348110d18')
+
+build() {
+  local _skip_modules=(
+    dracut
+    dracutlukscfg
+    dummycpp
+    dummyprocess
+    dummypython
+    dummypythonqt
+    initramfs
+    initramfscfg
+    interactiveterminal
+    packagechooser
+    packagechooserq
+    services-openrc
+  )
+
+  cmake -B build -S "$srcdir/calamares-$pkgver" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_INSTALL_LIBDIR=lib \
+    -DWITH_QT6=ON \
+    -DINSTALL_CONFIG=ON \
+    -DSKIP_MODULES="${_skip_modules[*]}" \
+    -DBUILD_TESTING=OFF \
+    -DKDE_INSTALL_BINDIR=/usr/bin \
+    -DKDE_INSTALL_SBINDIR=/usr/sbin \
+    -DKDE_INSTALL_LIBDIR=/usr/lib \
+    -DKDE_INSTALL_LIBEXECDIR=/usr/libexec \
+    -DKDE_INSTALL_INCLUDEDIR=/usr/include \
+    -DKDE_INSTALL_LOCALSTATEDIR=/var \
+    -DKDE_INSTALL_SHAREDSTATEDIR=/usr/share \
+    -DKDE_INSTALL_DATAROOTDIR=/usr/share \
+    -DKDE_INSTALL_DATADIR=/usr/share \
+    -DKDE_INSTALL_LOCALEDIR=/usr/share/locale \
+    -DKDE_INSTALL_MANDIR=/usr/share/man \
+    -DKDE_INSTALL_INFODIR=/usr/share/info \
+    -DKDE_INSTALL_SYSCONFDIR=/etc \
+    -Wno-dev
+
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}
