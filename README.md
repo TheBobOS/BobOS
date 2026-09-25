@@ -174,11 +174,41 @@ dans le noyau, il n'y a rien à installer.
 |---|---|---|
 | **VirtualBox** | `vboxvideo` (accélération 3D) et `vboxsf` (dossiers partagés) sont **dans le noyau** ; les modes d'écran sont fournis par le pilote DRM | rien pour que ça marche. Guest Additions = en plus (redimensionnement auto de la fenêtre, presse-papiers partagé) → voir plus bas |
 | **QEMU / KVM / Proxmox** | `virtio_*` est intégré au noyau (GPU, réseau, disque) | rien ; `qemu-guest-agent` est déjà dans l'ISO (gel/dégel des FS à l'extinction, commandes depuis l'hôte) |
-| **VMware** | `vmwgfx` (pilotage SVGA) est dans le noyau | rien |
+| **VMware** (Workstation, Fusion, ESXi) | `vmwgfx` (affichage SVGA) et `vmxnet3` (réseau paravirtuel) sont **dans le noyau** | rien pour booter et avoir le bureau ; `open-vm-tools` est **déjà dans l'ISO** (souris absolue, dossiers partagés, presse-papiers) |
 | **Hyper-V / Azure / GCP / AWS** | tout est dans le noyau | rien (bien utiliser UEFI + GPT, et une VM **64 bits**) |
 
 `bobfetch` affiche l'hyperviseur détecté et l'intégration disponible : c'est la
 première chose à regarder quand « ça marche pas ».
+
+### Notes selon l'hyperviseur
+
+**VirtualBox** — dossier partagé : le module `vboxsf` est dans le noyau, mais
+le montage se fait avec `mount -t vboxsf` (ou via l'agent, voir plus bas).
+L'accélération 3D passe par `vboxvideo` : elle exige *3D Acceleration* activée
+dans la VM, sinon Hyprland bascule en rendu logiciel (lisible mais mou).
+Le presse-papiers partagé demande l'agent (AUR, voir plus bas).
+
+**VMware** — ça marche : le noyau fournit `vmwgfx` (affichage) et `vmxnet3`
+(réseau), donc le bureau s'affiche et le réseau fonctionne sans installation.
+Deux points à connaître :
+
+- **Souris** : sans agent, la souris est une souris absolue USB (fine) ou
+  relative qui « colle » aux bords si tu as laissé *Virtual mouse device*
+  désactivé. BobOS embarque `open-vm-tools` et l'active sur le système
+  installé, donc la souris absolue est gérée. Si le pointeur reste collé :
+  dans les réglages de la VM, mets *Devices → Mouse → Virtual device → Show
+  cursor at edges* (ou désactive la souris virtuelle).
+- **Dossiers partagés / presse-papiers** : ils passent par `vmhgfs` et
+  `vmtoolsd`. `vmtoolsd` est activé chez nous ; si les dossiers
+  `/mnt/hgfs` restent vides, c'est que le noyau n'a pas `vmhgfs` en module
+  (rare) : dans ce cas, passe par un partage réseau (sshfs/samba) — le
+  réseau, lui, fonctionne.
+- **3D** : dépend de la config 3D de la VM et du pilote hôte ; on ne peut pas
+  le garantir, mais le rendu logiciel reste utilisable.
+
+**KVM / QEMU / Proxmox** — c'est la combination la plus confortable :
+`virtio-gpu` pour l'affichage, `qemu-guest-agent` (déjà dans l'ISO) pour que
+l'hôte puisse geler proprement les systèmes de fichiers à l'extinction.
 
 ### Réglages recommandés
 

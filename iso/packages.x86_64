@@ -92,6 +92,11 @@ qemu-guest-agent
 # spice-vdagent : QEMU/KVM en SPICE (VM distantes) : presse-papiers, redim.
 # Utile seulement si tu utilises l'affichage SPICE plutôt que virtio.
 spice-vdagent
+# open-vm-tools : VMware (Workstation/Fusion/ESXi). Le noyau fournit déjà
+# vmwgfx (affichage) et vmxnet3 (réseau) → l'OS démarre et affiche le bureau
+# sans rien installer ; ceci ajoute la souris absolue, les dossiers partagés
+# et le presse-papiers. Inerte sur une machine qui n'est pas sous VMware.
+open-vm-tools
 
 # GPU (NVIDIA DKMS : modules compilés pour linux ET linux-xanmod)
 mesa

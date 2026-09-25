@@ -234,5 +234,8 @@ systemctl enable docker.service >/dev/null 2>&1 || true
 systemctl enable fstrim.timer >/dev/null 2>&1 || true
 systemctl enable reflector.timer >/dev/null 2>&1 || true
 systemctl enable systemd-timesyncd.service >/dev/null 2>&1 || true
+# Intégration VMware (souris absolue, dossiers partagés, presse-papiers).
+# Le démon reste inerte ailleurs : inutile de le couper hors VMware.
+systemctl enable vmtoolsd.service >/dev/null 2>&1 || true
 
 log "terminé."
