@@ -165,6 +165,74 @@ Deux règles :
   pas d'autologin, l'écran se verrouille tout seul (`SUPER+L`, hypridle) et le
   trousseau de clés pacman est créé sur la machine. Voir `bobos-target-fixes`.
 
+## Machines virtuelles
+
+BobOS fonctionne **sur toutes les VM** : les pilotes nécessaires sont déjà
+dans le noyau, il n'y a rien à installer.
+
+| Hyperviseur | Ce qui est déjà là | À installer ? |
+|---|---|---|
+| **VirtualBox** | `vboxvideo` (accélération 3D) et `vboxsf` (dossiers partagés) sont **dans le noyau** ; les modes d'écran sont fournis par le pilote DRM | rien pour que ça marche. Guest Additions = en plus (redimensionnement auto de la fenêtre, presse-papiers partagé) → voir plus bas |
+| **QEMU / KVM / Proxmox** | `virtio_*` est intégré au noyau (GPU, réseau, disque) | rien ; `qemu-guest-agent` est déjà dans l'ISO (gel/dégel des FS à l'extinction, commandes depuis l'hôte) |
+| **VMware** | `vmwgfx` (pilotage SVGA) est dans le noyau | rien |
+| **Hyper-V / Azure / GCP / AWS** | tout est dans le noyau | rien (bien utiliser UEFI + GPT, et une VM **64 bits**) |
+
+`bobfetch` affiche l'hyperviseur détecté et l'intégration disponible : c'est la
+première chose à regarder quand « ça marche pas ».
+
+### Réglages recommandés
+
+**VirtualBox** (et c'est aussi le plus souvent la cause des échecs) :
+
+| Réglage | Valeur |
+|---|---|
+| Type / Version | **Linux** → **Other/Unknown (64-bit)** (une VM 32 bits ne boot pas, cf. message i686 ci-dessus) |
+| Mémoire | 4096 Mo mini (8192 confortable, le live charge Firefox/Steam en RAM) |
+| Processeurs | 2–4, et **cocher l'accélération matérielle** (VT-x/AMD-V) |
+| Écran | 1280x800 ou 1920x1080 ; **Display/Graphique → 3D Acceleration activé** |
+| Stockage | disque **dynamique de 40 Go** (l'installateur refuse en dessous de 20 Go) |
+| Réseau | NAT par défaut ;bridge en pont seulement si besoin |
+
+BobOS ne force jamais un mode d'écran que le pilote n'annonce pas : dans une
+fenêtre de VM étroite (1280x800), il garde 1280x800 au lieu de forcer un
+1080p hors plage qui donnerait un écran noir. Pour choisir à la main :
+Paramètres → Écran, ou `bobos-res`.
+
+**QEMU / KVM** :
+
+```
+qemu-system-x86_64 \
+  -cpu host -m 8192 -smp 4 \
+  -enable-kvm \
+  -device virtio-gpu-pci -vga virtio \
+  -drive file=bobos.iso,format=raw,if=virtio,media=cdrom \
+  -drive file=vm.qcow2,format=qcow2,if=virtio \
+  -audiodev none -display gtk,show-cursor=on
+```
+
+`-cpu host` (ou `qemu64`) : ne jamais `-cpu i686`/`pentium3`, ça force le
+32 bits. `-vga virtio` + `virtio-gpu` = accélération matérielle ; sans ça
+QEMU marche quand même, en logiciel.
+
+### Guest Additions VirtualBox (optionnel)
+
+Ce qui manque sans les Additions, c'est **uniquement l'agent utilisateur**
+(redimensionnement auto de la fenêtre, presse-papiers partagé, montage
+automatique des dossiers). L'affichage, l'accélération et les dossiers
+partagés fonctionnent déjà. Comme Arch ne fournit plus
+`virtualbox-guest-utils` (sa dépendance `VIRTUALBOX-GUEST-MODULES` n'a aucun
+fournisseur dans les dépôts officiels), il faut le compiler depuis l'AUR :
+
+```bash
+git clone https://aur.archlinux.org/virtualbox-guest-dkms.git
+cd virtualbox-guest-dkms && makepkg -si      #DKMS + vboxvideo
+sudo pacman -S virtualbox-guest-utils
+systemctl enable vboxservice && sudo usermod -aG vboxsf $USER
+```
+
+C'est volontairement **hors ISO** : ces modules DKMS sont recompilés à chaque
+mise à jour de noyau, et on ne veut pas d'un module tiers qui casse le boot.
+
 ## Licence
 
 BobOS est sous licence [GPL-3.0](LICENSE).

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# bobos-screen — écran sur le mode max (résolution + rafraîchissement)
-# + tentative de forçage 1080p si l'EDID donne des modes trop bas (écran étiré)
+# bobos-screen — règle l'écran sur le meilleur mode possible (résolution +
+# rafraîchissement) sans jamais laisser un écran noir irrécupérable.
 #
-# Sûreté : chaque mode appliqué est VÉRIFIÉ ; si l'écran ne l'a pas pris
-# (mode hors plage → écran noir), on revient immédiatement à l'ancien mode
-# (BOB-10 : avant, le script pouvait laisser un écran noir sans issue).
+# En VM (VirtualBox, QEMU…) on ne force PAS 1920x1080 : la VM expose ce que le
+# pilote DRM voit, et un mode hors plage = écran noir. On prend donc le plus
+# grand mode ≤ 1080p, et chaque application est vérifiée puis annulée si elle
+# n'a pas été prise.
 set -u
 
 FLAG="$HOME/.config/bobos/screen-manual"
@@ -22,7 +23,7 @@ width_of() {
 
 # apply <écran> <mode> : applique, vérifie, revient en arrière si ça rate
 apply() {
-    local name="$1" mode="$2" want prev
+    local name="$1" mode="$2" want prev got
     want="${mode%%x*}"                 # ex. 1920x1080@60 → 1920
     prev="$(hyprctl monitors -j 2>/dev/null \
         | jq -r --arg n "$name" '.[] | select(.name==$n) | "\(.width)x\(.height)@\(.refreshRate)"' 2>/dev/null | head -n1)"
@@ -30,10 +31,8 @@ apply() {
     hyprctl keyword monitor "$name,$mode,auto,1" >/dev/null 2>&1 || return 1
     sleep 1
 
-    local got
     got="$(width_of "$name")"
     if [ -z "$got" ] || [ "$got" -lt "$want" ] 2>/dev/null; then
-        # le mode n'a pas été pris → retour à l'état précédent
         if [ -n "$prev" ]; then
             hyprctl keyword monitor "$name,$prev,auto,1" >/dev/null 2>&1 || true
         fi
@@ -44,16 +43,23 @@ apply() {
     return 0
 }
 
-# --- En VM : 1080p (sinon virt-viewer met le flou) ------------------------
-if systemd-detect-virt -q 2>/dev/null; then
-    mons="$(hyprctl monitors -j 2>/dev/null)" || exit 0
-    echo "$mons" | jq -r '.[].name' | while read -r name; do
-        apply "$name" "1920x1080@60" || true
-    done
-    exit 0
-fi
+# best_for <json du moniteur> : le plus grand mode ≤ 1080p, puis le plus haut
+# rafraîchissement. On ne force JAMAIS un mode que le pilote n'annonce pas :
+# hors plage = écran noir sans retour (c'était le bug de l'ancienne version,
+# qui forçait 1920x1080 dans toutes les VM).
+best_mode() {
+    local mon_json="$1" cap="$2"
+    printf '%s' "$mon_json" | jq -r --argjson cap "$cap" '
+        [.availableModes[]?
+         | capture("(?<w>[0-9]+)x(?<h>[0-9]+)@(?<hz>[0-9.]+)Hz")
+         | {w: (.w|tonumber), h: (.h|tonumber), hz: (.hz|tonumber),
+            mode: (.w + "x" + .h + "@" + .hz)}]
+        | map(select((.w * .h) <= ($cap.w * $cap.h)))
+        | sort_by(.w, .h, .hz) | last
+        | if . == null then "" else .mode end'
+}
 
-# --- Matériel : attendre que Hyprland expose les outputs -------------------
+# attendre que Hyprland expose les outputs
 mons=""
 for _ in $(seq 1 15); do
     mons="$(hyprctl monitors -j 2>/dev/null)" && break
@@ -61,31 +67,23 @@ for _ in $(seq 1 15); do
 done
 [ -n "$mons" ] || exit 0
 
+# plafond 1080p : au-delà, une fenêtre de VM devient illisible
+CAP="{\"w\":1920,\"h\":1080}"
+
 echo "$mons" | jq -c '.[]' | while read -r mon; do
     name="$(echo "$mon" | jq -r '.name')"
+    best="$(best_mode "$mon" "$CAP")"
+    [ -n "$best" ] || continue
 
-    # meilleur mode listé : plus gros en pixels, puis plus haut Hz dessus
-    read -r best best_px <<EOF
-$(echo "$mon" | jq -r '
-    [.availableModes[]?
-     | capture("(?<w>[0-9]+)x(?<h>[0-9]+)@(?<hz>[0-9.]+)Hz")
-     | {px: ((.w|tonumber) * (.h|tonumber)), hz: (.hz|tonumber),
-        mode: (.w + "x" + .h + "@" + .hz)}]
-    | sort_by(.px, .hz) | last
-    | if . == null then " " else "\(.mode) \(.px)" end')
-EOF
-    [ -n "${best:-}" ] || continue
-
-    if [ "${best_px:-0}" -lt $((1920 * 1080)) ]; then
-        # EDID capricieux (VGA) → on tente du plus grand au plus petit,
-        # chaque tentative est vérifiée et annulée si refusée
+    if apply "$name" "$best"; then
+        :
+    else
+        # plan B : on essaie les résolutions classiques, une par une
         for cand in 1920x1080@60 1600x900@60 1366x768@60; do
             if apply "$name" "$cand"; then
                 break
             fi
         done
-    else
-        apply "$name" "$best" || true
     fi
 done
 exit 0

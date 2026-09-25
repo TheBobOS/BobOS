@@ -1,17 +1,52 @@
 #!/usr/bin/env bash
 # bobfetch — infos système, version BobOS (au lieu de taper « fastfetch »)
 # fastfetch reste le moteur ; c'est la commande et le logo qui changent.
+# En machine virtuelle, on affiche en plus l'hyperviseur et l'intégration
+# disponible : c'est la première question à se poser quand « ça marche pas ».
 set -euo pipefail
 
 LOGO="/usr/share/bobos/bobos.ascii"
 
+# --- hyperviseur (une ligne en plus, hors fastfetch) -----------------------
+virt_info() {
+    local v
+    v="$(systemd-detect-virt 2>/dev/null || echo none)"
+    if [[ "$v" == "none" || -z "$v" ]]; then
+        return 0
+    fi
+    local extra=""
+    case "$v" in
+        oracle)
+            # VirtualBox : les pilotes vboxvideo/vboxsf sont déjà dans le noyau
+            if ls /sys/bus/pci/devices/*/vendor 2>/dev/null | xargs -r grep -lqs "0x80ee"; then
+                extra=" (pilotage vbox détecté : accélération et dossiers partagés OK)"
+            fi
+            ;;
+        kvm|qemu)
+            command -v qemu-ga &>/dev/null 2>&1 \
+                && extra=" (qemu-guest-agent : gel/dégel des FS à l'extinction)"
+            ;;
+        microsoft)
+            extra=" (Hyper-V : activé par défaut dans le noyau)"
+            ;;
+        vmware)
+            extra=" (VMware : pilote vmwgfx déjà dans le noyau)"
+            ;;
+    esac
+    printf '  Hyperviseur : %s%s\n' "$v" "$extra"
+}
+
 if [[ -f "$LOGO" ]] && command -v fastfetch >/dev/null 2>&1; then
-    exec fastfetch --logo "$LOGO" --logo-type file "$@"
+    fastfetch --logo "$LOGO" --logo-type file "$@" || true
+    virt_info
+    exit 0
 fi
 
 # pas de logo (ou fastfetch absent) : on lance quand même ce qu'on peut
 if command -v fastfetch >/dev/null 2>&1; then
-    exec fastfetch "$@"
+    fastfetch "$@" || true
+    virt_info
+    exit 0
 fi
 echo "bobfetch : fastfetch est introuvable." >&2
 exit 127

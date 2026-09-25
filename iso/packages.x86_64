@@ -80,6 +80,19 @@ zram-generator
 cryptsetup
 os-prober
 
+# Machines virtuelles
+# NB : les pilotes sont DÉJÀ dans le noyau (vboxvideo, vboxsf, vboxguest,
+# vmwgfx pour VirtualBox/VMware ; virtio_* est intégré) → accélération et
+# dossiers partagés VBox fonctionnent SANS Guest Additions.
+# virtualbox-guest-utils n'est PAS installable depuis les dépôts Arch (sa
+# dépendance VIRTUALBOX-GUEST-MODULES n'a aucun fournisseur officiel) : on ne
+# l'ajoute pas, sinon le build casse.
+# qemu-guest-agent : QEMU/KVM (gel/dégel des FS, commandes depuis l'hôte)
+qemu-guest-agent
+# spice-vdagent : QEMU/KVM en SPICE (VM distantes) : presse-papiers, redim.
+# Utile seulement si tu utilises l'affichage SPICE plutôt que virtio.
+spice-vdagent
+
 # GPU (NVIDIA DKMS : modules compilés pour linux ET linux-xanmod)
 mesa
 xf86-video-amdgpu
