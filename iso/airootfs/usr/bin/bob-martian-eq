@@ -1,38 +1,73 @@
 #!/usr/bin/env bash
-# bob-martian-eq — applique le preset EasyEffects "mode martien"
+# bob-martian-eq — active/désactive l'equalizer « mode martien » (EasyEffects)
+#
+# API EasyEffects 8 (vérifiée avec « easyeffects --help ») :
+#   -p, --presets          AFFICHE la liste des presets (ne charge rien !)
+#   -l, --load-preset      CHARGE un preset  ← c'était celui-là qu'il fallait
+#   -b, --bypass <1|2|3>   contournement global (1=on, 2=off, 3=état)
+# L'ancien script faisait « easyeffects -p martian » : il affichait la liste des
+# presets sans rien charger, et « -p "" » pour couper (sans effet).
 set -euo pipefail
+
+BOBOS_LIB="${BOBOS_LIB:-/usr/local/lib/bobos/common.sh}"
+# shellcheck source=/dev/null
+[[ -r "$BOBOS_LIB" ]] && source "$BOBOS_LIB" || {
+    echo "[bobos] bibliothèque BobOS introuvable : $BOBOS_LIB" >&2
+    exit 1
+}
 
 PRESET_SRC="/usr/share/bobos/easyeffects/martian.json"
 PRESET_DIR="$HOME/.config/easyeffects/input"
+PRESET_NAME="martian"
 
 usage() {
     echo "bob-martian-eq — equalizer pré-réglé 'mode martien'"
     echo "usage : bob-martian-eq on|off|status"
 }
 
-mkdir -p "$PRESET_DIR"
+load_preset_if_running() {
+    pgrep -x easyeffects >/dev/null 2>&1 || return 0
+    easyeffects -l "$PRESET_NAME" 2>/dev/null || log_err "EasyEffects a refusé le preset $PRESET_NAME"
+}
 
 case "${1:-}" in
     on|apply)
-        cp "$PRESET_SRC" "$PRESET_DIR/martian.json"
-        # charge le preset dans easyeffects s'il tourne
-        if pgrep -x easyeffects &>/dev/null; then
-            easyeffects -p martian 2>/dev/null || true
+        if [[ ! -f "$PRESET_SRC" ]]; then
+            log_err "preset martien absent : $PRESET_SRC"
+            exit 1
         fi
-        echo "[bob-martian-eq] mode martien ON 🔊 (preset appliqué, relance EasyEffects si besoin)"
+        install -d -m 0755 "$PRESET_DIR"
+        install -m 0644 "$PRESET_SRC" "$PRESET_DIR/$PRESET_NAME.json"
+        # EasyEffects doit être fermé pendant qu'on écrit dans son dossier
+        if pgrep -x easyeffects >/dev/null 2>&1; then
+            easyeffects -q 2>/dev/null || true
+            sleep 1
+            easyeffects >/dev/null 2>&1 &
+            sleep 2
+        fi
+        load_preset_if_running
+        log "mode martien activé (preset chargé dans Easy Effects)"
         ;;
     off)
-        rm -f "$PRESET_DIR/martian.json"
-        if pgrep -x easyeffects &>/dev/null; then
-            easyeffects -p "" 2>/dev/null || true
+        # pas de « déchargement » en CLI : on coupe par le contournement global
+        if pgrep -x easyeffects >/dev/null 2>&1; then
+            easyeffects -b 1 2>/dev/null || log_err "EasyEffects n'a pas pu être contourné"
         fi
-        echo "[bob-martian-eq] mode martien OFF"
+        log "mode martien désactivé (contournement global activé)"
         ;;
     status)
-        if [[ -f "$PRESET_DIR/martian.json" ]]; then
-            echo "[bob-martian-eq] mode martien actif."
+        if [[ -f "$PRESET_DIR/$PRESET_NAME.json" ]]; then
+            state="inactif (preset installé)"
+            if pgrep -x easyeffects >/dev/null 2>&1; then
+                case "$(easyeffects -b 3 2>/dev/null | tr -d '[:space:]')" in
+                    1) state="actif, contourné (bypass ON)" ;;
+                    2) state="actif" ;;
+                    *) state="état illisible" ;;
+                esac
+            fi
+            log "mode martien : $state"
         else
-            echo "[bob-martian-eq] mode martien inactif."
+            log "mode martien : inactif (bob-martian-eq on pour l'activer)"
         fi
         ;;
     *)
