@@ -143,10 +143,63 @@ run_checks() {
     fi
 
     echo "[check] règles nftables (nft -c -f)…"
-    if command -v nft >/dev/null; then
+    if command -v nft >/dev/null 2>&1; then
+        # « nft --check » ne modifie RIEN mais il a besoin des privilèges
+        # netlink. Deux stratégies, et surtout on distingue « l'outil n'a pas
+        # pu démarrer » de « le fichier contient une vraie erreur » : le
+        # premier saute le contrôle, le second bloque le build.
+        nft_env_error() {
+            case "$1" in
+                *"cache initialization failed"*|*"Operation not permitted"*|\
+                *"Cannot open netlink"*|*"netlink: Error"*|*"Permission denied"*|"") return 0 ;;
+                *) return 1 ;;
+            esac
+        }
+        nft_check() {
+            local f="$1" out1="" out2="" rc1=0 rc2=0
+            out1="$(unshare -rn nft -c -f "$f" 2>&1)" || rc1=$?
+            if (( rc1 == 0 )); then
+                return 0                                   # règles valides
+            fi
+            if ! nft_env_error "$out1"; then
+                printf '%s\n' "$out1"                       # vraie erreur
+                return 1
+            fi
+            # la 1re tentative manquait de privilèges → on réessaie directement
+            out2="$(nft -c -f "$f" 2>&1)" || rc2=$?
+            if (( rc2 == 0 )); then
+                return 0
+            fi
+            if ! nft_env_error "$out2"; then
+                printf '%s\n' "$out2"                       # vraie erreur
+                return 1
+            fi
+            printf '%s\n' "${out1:-$out2}"
+            return 2                                       # environnement
+        }
+
+        # auto-test : le vérificateur DOIT rejeter un fichier volontairement
+        # faux, sinon ce contrôle ne prouve rien
+        _bad="$(mktemp /tmp/bobos-nft-bad.XXXXXX.nft)"
+        printf 'table inet bobos {\n  chain input {\n    type filter hook input priority filter; policy drop;\n    udp dport 53,80 accept\n  }\n}\n' > "$_bad"
+        _rc=0; nft_check "$_bad" >/dev/null 2>&1 || _rc=$?
+        rm -f "$_bad"
+        if [[ $_rc -eq 1 ]]; then
+            echo "  ✓ auto-test : une vraie erreur est bien détectée"
+        else
+            echo "  ✗ le vérificateur ne détecte PAS une vraie erreur (rc=$_rc)"
+            fail=1
+        fi
+
         for r in iso/airootfs/etc/bobos/firewall*.nft; do
-            unshare -rn nft -c -f "$r" >/dev/null 2>&1 \
-                && echo "  ✓ $(basename "$r")" || { echo "  ✗ $(basename "$r") : syntaxe nft invalide"; fail=1; }
+            nft_check "$r" >/dev/null 2>&1; _rc=$?
+            case $_rc in
+                0) echo "  ✓ $(basename "$r")" ;;
+                2) echo "  ⚠ $(basename "$r") : contrôle sauté (nft sans privilèges ici)" ;;
+                *) echo "  ✗ $(basename "$r") : syntaxe nft INVALIDE"
+                   nft_check "$r" 2>&1 | sed 's/^/      /' || true
+                   fail=1 ;;
+            esac
         done
     fi
 
