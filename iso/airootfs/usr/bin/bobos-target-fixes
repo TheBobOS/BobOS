@@ -182,6 +182,52 @@ rm -f /usr/share/man/man8/calamares.8.gz
 # ---------------------------------------------------------------------------
 # 8. Presets mkinitcpio « propre » + régénération des initramfs
 # ---------------------------------------------------------------------------
+# 8 bis. D'abord, on retire la configuration d'initramfs du LIVE.
+#
+# L'image est copiée telle quelle : /etc/mkinitcpio.conf.d/archiso.conf (les
+# hooks du live) arrive dans la cible. Avec « mkinitcpio -P » plus bas, ça
+# fabrique un initramfs ARCHISO, dont le /init cherche les paramètres
+# archiso* du grub — absents sur la cible. Au boot :
+#
+#     ERROR: '' device did not show up after 30 seconds...
+#     Falling back to interactive prompt
+#     [rootfs ~]#
+#
+# c'est-à-dire un système installé qui ne démarre pas du tout (constaté sur une
+# vraie installation). On supprime le drop-in du live, et on nettoie au cas où
+# le hook aurait été mis directement dans /etc/mkinitcpio.conf : la cible
+# reprend alors la liste de hooks de sa distribution.
+#
+# $1 = racine à traiter (défaut : la racine réelle)
+bobos_nettoie_hooks_initramfs() {
+    local racine="${1:-/}" f line hooks kept h
+    rm -f "$racine/etc/mkinitcpio.conf.d/archiso.conf"
+    rmdir "$racine/etc/mkinitcpio.conf.d" 2>/dev/null || true
+
+    f="$racine/etc/mkinitcpio.conf"
+    [[ -f "$f" ]] || return 0
+    line="$(grep -m1 -E '^[[:blank:]]*HOOKS=' "$f" || true)"
+    [[ -n "$line" ]] || return 0
+
+    # HOOKS=(a b c) → « a b c », on retire archiso* et memdisk
+    hooks="${line#*HOOKS=}"
+    hooks="${hooks#*(}"
+    hooks="${hooks%)}"
+    kept=""
+    for h in $hooks; do
+        case "$h" in
+            archiso|archiso_*|memdisk) continue ;;
+        esac
+        kept="${kept:+$kept }$h"
+    done
+    # liste vide → on ne touche à rien : une « HOOKS=() » cassait tout, et la
+    # vérification plus bas signalera le résidu.
+    [[ -n "$kept" ]] || return 0
+    sed -i -E "s|^[[:blank:]]*HOOKS=.*|HOOKS=(${kept})|" "$f"
+    log "hooks « live » retirés : HOOKS=(${kept})"
+}
+bobos_nettoie_hooks_initramfs /
+
 log "presets des kernels → default + fallback..."
 cat > /etc/mkinitcpio.d/linux.preset <<'PRE'
 PRESETS=('default' 'fallback')
@@ -222,6 +268,15 @@ if [[ -s /etc/crypttab ]]; then
     # le hook n'a de sens qu'avec le module qui le cherche
     grep -qE '\bsd-encrypt\b' /etc/mkinitcpio.conf \
         || log "ATTENTION : sd-encrypt n'a pas pu être ajouté (ligne HOOKS inattendue ?)"
+fi
+
+# Filet de sécurité : si un hook « live » traîne encore, l'initramfs produit
+# sera un initramfs archiso et le système installé ne bootera pas. On le dit
+# clairement plutôt que de laisser une bombe à retardement.
+if grep -qsE '^[[:blank:]]*HOOKS=.*\b(archiso|memdisk)\b' /etc/mkinitcpio.conf /etc/mkinitcpio.conf.d/* 2>/dev/null; then
+    log "ERREUR FATALE : hook archiso/memdisk encore présent ; initramfs archiso produit" >&2
+    log "  → le système installé ne démarrerait pas. Abandon." >&2
+    exit 1
 fi
 
 mkinitcpio -P

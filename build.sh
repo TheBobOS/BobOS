@@ -321,6 +321,32 @@ PY
         echo "  ✗ UEFI : aucune entrée conforme"; fail=1
     fi
 
+    echo "[check] config d'initramfs du live : rien ne doit survivre sur la cible"
+    # Un drop-in dans /etc/mkinitcpio.conf.d/ est une configuration du LIVE
+    # (archiso). L'image étant copiée telle quelle dans la cible, si
+    # bobos-target-fixes ne le retire pas, « mkinitcpio -P » fabrique un
+    # initramfs ARCHISO : le système installé affiche
+    # « ERROR: '' device did not show up after 30 seconds... » puis
+    # [rootfs ~]#. Constaté sur une vraie installation.
+    _mkd="iso/airootfs/etc/mkinitcpio.conf.d"
+    if [[ -d "$_mkd" ]]; then
+        shopt -s nullglob
+        for f in "$_mkd"/*; do
+            _b="$(basename "$f")"
+            # on cherche une VRAIE ligne « rm … <fichier> », pas une mention
+            # dans un commentaire
+            if grep -E '^[[:blank:]]*rm -[a-zA-Z]+' iso/airootfs/usr/bin/bobos-target-fixes \
+                 | grep -qF -- "$_b"; then
+                echo "  ✓ drop-in live $_b : retiré de la cible"
+            else
+                echo "  ✗ drop-in live $_b : bobos-target-fixes ne le retire PAS"
+                echo "      → initramfs archiso sur la cible → système installé non bootable"
+                fail=1
+            fi
+        done
+        shopt -u nullglob
+    fi
+
     echo "[check] profil : exécutables airootfs épinglés dans profiledef.sh ?"
     while IFS= read -r f; do
         rel="/${f#iso/airootfs/}"
