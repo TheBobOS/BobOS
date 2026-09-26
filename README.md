@@ -102,6 +102,39 @@ totalité des cas, le problème est la machine virtuelle, pas le PC :
 | **QEMU/KVM** | `-cpu host` ou `-cpu qemu64` (un `-cpu i686`/`pentium3` force le 32 bits). |
 | **PC réel (Lenovo…)** | L'ISO démarre sur **tout** x86-64. Si ça échoue quand même : désactivez *CSM / Legacy Boot* dans le BIOS et rebootez en UEFI, ou à l'inverse expressez le disque en **GPT + UEFI**. |
 
+### Le menu s'affiche mais l'écran reste noir
+
+Le live démarre sur l'écran **et** sur un port série (`console=tty0
+console=ttyS0,115200`). Le port série est utile pour voir ce qui bloque, machine
+sans écran comprise :
+
+```
+qemu-system-x86_64 -m 4096 -enable-kvm \
+  -cdrom out/bobos-*.iso -nographic
+```
+
+Tout le journal du boot apparaît alors dans le terminal. Deux causes historiques
+de « écran noir après le menu », toutes deux corrigées et désormais vérifiées par
+un contrôle de build :
+
+- **`console=` sans `console=tty0`** : la dernière console de la ligne de
+  commande devient la console *primaire*. Si seul `ttyS0` est présent, le VGA
+  n'affiche rien.
+- **`systemd-firstboot` non masqué** : le live n'a pas de fuseau horaire, donc
+  l'assistant de premier démarrage ouvre une invite et **attend une saisie** —
+  or il est lancé avant `sysinit.target`, donc le boot s'arrête là (pas de
+  bureau). Le live passe `systemd.mask=systemd-firstboot.service` : un système
+  éphémère ne pose pas de question au démarrage.
+
+### « No command specified for ISOLINUX »
+
+`whichsys.c32` choisissait une branche de boot selon ce que le *firmware*
+croit être le mode de démarrage (un firmware BIOS tente d'abord un démarrage
+réseau, il est donc détecté « pxe » même en bootant depuis le CD) ; quand la
+branche correspondante manquait, il affiche cette erreur et ne démarre rien.
+BobOS ne fait pas de netboot : le menu entre directement dans la configuration
+système, sans `whichsys`.
+
 ## Mettre à jour son OS
 
 Trois portes d'entrée, **un seul** moteur de mise à jour (`bob-update`) :

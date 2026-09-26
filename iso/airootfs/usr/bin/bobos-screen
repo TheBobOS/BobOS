@@ -21,7 +21,9 @@ width_of() {
         | jq -r --arg n "$1" '.[] | select(.name==$n) | .width' 2>/dev/null | head -n1
 }
 
-# apply <écran> <mode> : applique, vérifie, revient en arrière si ça rate
+# apply <écran> <mode> : applique, vérifie, revient en arrière si ça rate.
+# Ne notifie RIEN : l'appelant regroupe. Sans cela, une VM dont le pilote DRM
+# n'accepte aucun mode affichait quatre alertes « critique » à chaque boot.
 apply() {
     local name="$1" mode="$2" want prev got
     want="${mode%%x*}"                 # ex. 1920x1080@60 → 1920
@@ -36,8 +38,6 @@ apply() {
         if [ -n "$prev" ]; then
             hyprctl keyword monitor "$name,$prev,auto,1" >/dev/null 2>&1 || true
         fi
-        command -v notify-send >/dev/null 2>&1 && \
-            notify-send -u critical "BobOS" "Mode $mode refusé par l'écran — retour au mode précédent." || true
         return 1
     fi
     return 0
@@ -47,13 +47,21 @@ apply() {
 # rafraîchissement. On ne force JAMAIS un mode que le pilote n'annonce pas :
 # hors plage = écran noir sans retour (c'était le bug de l'ancienne version,
 # qui forçait 1920x1080 dans toutes les VM).
+#
+# Hyprland a deux formats pour availableModes selon les versions : une liste de
+# chaînes ("1920x1080@60.00Hz") ou une liste d'objets ({width, height,
+# refreshRate}). On accepte les deux : sinon, sur une version qui renvoie des
+# objets, best_mode ne trouve rien et le script ne fait RIEN du tout.
 best_mode() {
     local mon_json="$1" cap="$2"
     printf '%s' "$mon_json" | jq -r --argjson cap "$cap" '
-        [.availableModes[]?
-         | capture("(?<w>[0-9]+)x(?<h>[0-9]+)@(?<hz>[0-9.]+)Hz")
-         | {w: (.w|tonumber), h: (.h|tonumber), hz: (.hz|tonumber),
-            mode: (.w + "x" + .h + "@" + .hz)}]
+        [ .availableModes[]?
+          | if type == "string"
+            then capture("(?<w>[0-9]+)x(?<h>[0-9]+)@(?<hz>[0-9.]+)Hz")
+            else { w: .width, h: .height, hz: .refreshRate }
+            end
+          | { w: (.w|tonumber), h: (.h|tonumber), hz: (.hz|tonumber),
+              mode: ((.w|tostring) + "x" + (.h|tostring) + "@" + (.hz|tostring)) } ]
         | map(select((.w * .h) <= ($cap.w * $cap.h)))
         | sort_by(.w, .h, .hz) | last
         | if . == null then "" else .mode end'
@@ -70,20 +78,38 @@ done
 # plafond 1080p : au-delà, une fenêtre de VM devient illisible
 CAP="{\"w\":1920,\"h\":1080}"
 
-echo "$mons" | jq -c '.[]' | while read -r mon; do
+# ATTENTION : boucle alimentée par une substitution de processus et NON par un
+# pipe. Dans un pipe, le while tourne dans un sous-shell : « apply_ok » y resterait
+# prisonnier et la notification finale partirait toujours, même en cas de succès.
+apply_ok=""
+tried=0
+while read -r mon; do
+    tried=$((tried + 1))
     name="$(echo "$mon" | jq -r '.name')"
     best="$(best_mode "$mon" "$CAP")"
-    [ -n "$best" ] || continue
+    [ -n "$best" ] || { apply_ok=1; continue; }
 
     if apply "$name" "$best"; then
-        :
+        apply_ok=1
     else
         # plan B : on essaie les résolutions classiques, une par une
         for cand in 1920x1080@60 1600x900@60 1366x768@60; do
             if apply "$name" "$cand"; then
+                apply_ok=1
                 break
             fi
         done
     fi
-done
+done < <(echo "$mons" | jq -c '.[]')
+
+# Une seule notification, et seulement si AUCUN mode n'a pu être appliqué :
+# c'est le seul cas qui mérite une alerte (l'écran est peut-être mal réglé).
+# Le silence dans les autres cas : en VM, un mode refusé puis un repli réussi
+# est normal, ce n'est pas une erreur. « tried » évite aussi d'alerter quand on
+# n'a rien pu analyser du tout (pas de Hyprland, jq en erreur).
+if [ -z "${apply_ok:-}" ] && [ "${tried:-0}" -gt 0 ]; then
+    command -v notify-send >/dev/null 2>&1 && \
+        notify-send -u normal "BobOS" \
+            "Aucun mode d'écran n'a pu être appliqué — l'écran garde son mode actuel." || true
+fi
 exit 0
