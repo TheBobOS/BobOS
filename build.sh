@@ -227,6 +227,45 @@ PY
         echo "  ✓ pas de doublon"
     fi
 
+    echo "[check] menu de démarrage BIOS (syslinux)…"
+    # 1) toute config Include/CONFIG référencée doit exister, sinon ISOLINUX
+    #    n'a « No command specified » et le PC ne démarre pas.
+    _sl=iso/syslinux/syslinux.cfg
+    _miss=""
+    for f in $(grep -oE '^(INCLUDE|CONFIG) +[A-Za-z0-9_.-]+\.cfg' "$_sl" 2>/dev/null | awk '{print $2}' | sort -u); do
+        [[ -f "iso/syslinux/$f" ]] || _miss="$_miss $f"
+    done
+    if [[ -z "$_miss" ]]; then
+        echo "  ✓ toutes les configs référencées existent"
+    else
+        echo "  ✗ config(s) référencée(s) mais absente(s) :$_miss"; fail=1
+    fi
+    # 2) si whichsys.c32 est réintroduit, il faut les trois branches : il
+    #    choisit selon ce que le FIRMWARE croit être le mode de démarrage, et
+    #    un firmware BIOS (SeaBIOS, vieux portable) est détecté « pxe » même en
+    #    bootant depuis le CD. Sans la branche correspondante : plantage.
+    if grep -vE '^[[:blank:]]*#' "$_sl" | grep -q "whichsys"; then
+        _br=""
+        for br in pxe sys iso; do
+            grep -q -- "-$br- " "$_sl" || _br="$_br -$br-"
+        done
+        if [[ -z "$_br" ]]; then
+            echo "  ✓ whichsys : branches pxe/sys/iso toutes présentes"
+        else
+            echo "  ✗ whichsys utilisé mais branche(s) manquante(s)$_br"
+            echo "      (le PC refusera de booter : « No command specified for ISOLINUX »)"
+            fail=1
+        fi
+    else
+        echo "  ✓ pas de whichsys (détection de firmware inutile : pas de netboot)"
+    fi
+    # 3) le menu doit exister
+    if [[ -f iso/syslinux/archiso_sys.cfg ]]; then
+        echo "  ✓ archiso_sys.cfg présent"
+    else
+        echo "  ✗ archiso_sys.cfg manquant"; fail=1
+    fi
+
     echo "[check] profil : exécutables airootfs épinglés dans profiledef.sh ?"
     while IFS= read -r f; do
         rel="/${f#iso/airootfs/}"
