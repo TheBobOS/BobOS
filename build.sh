@@ -266,6 +266,61 @@ PY
         echo "  ✗ archiso_sys.cfg manquant"; fail=1
     fi
 
+    # 4) chaque entrée doit charger un noyau ET être capable de démarrer le
+    #    live. Trois pièges déjà payés :
+    #      - un APPEND sans LINUX/INITRD associé (entrée morte),
+    #      - l'absence de console=tty0 : tout part en série, écran VGA noir,
+    #      - l'absence de masque firstboot : systemd-firstboot attend une
+    #        saisie AVANT sysinit.target → le boot s'arrête, pas de bureau.
+    echo "[check] entrées de boot : noyau, initramfs, console, firstboot…"
+    _bmod=$(grep -cE '^[[:blank:]]*APPEND' iso/syslinux/archiso_sys-linux.cfg)
+    _prob=$(awk '
+        /^[[:blank:]]*#/ { next }
+        /^LABEL/  { lbl=$2; next }
+        /^LINUX/  { if ($2 != "") lin=1; next }
+        /^INITRD/ { if ($2 != "") ini=1; next }
+        /^APPEND/ {
+            if (lbl == "")            { print "APPEND hors de tout LABEL (ligne " NR ")" }
+            else if (!lin || !ini)   { print "entrée " lbl " : APPEND sans LINUX/INITRD" }
+            else {
+                if ($0 !~ /console=tty0/)                              print "entrée " lbl " : pas de console=tty0 (écran VGA noir)"
+                if ($0 !~ /systemd\.mask=systemd-firstboot\.service/)   print "entrée " lbl " : firstboot non masqué (le boot bloque sur son invite)"
+                n++
+            }
+            lin=0; ini=0
+        }
+    ' iso/syslinux/archiso_sys-linux.cfg)
+    _nlab=$(grep -cE '^LABEL' iso/syslinux/archiso_sys-linux.cfg)
+    if [[ -n "$_prob" ]]; then
+        while read -r p; do echo "  ✗ $p"; done <<< "$_prob"
+        fail=1
+    elif [[ "$_nlab" -gt 0 && "$_nlab" -eq "$_bmod" ]]; then
+        echo "  ✓ BIOS : $_bmod entrée(s), noyau + console + masque firstboot"
+    else
+        echo "  ✗ BIOS : $_bmod APPEND pour $_nlab LABEL"; fail=1
+    fi
+    # même contrôle sur les entrées systemd-boot (UEFI)
+    for f in iso/efiboot/loader/entries/*.conf; do
+        [[ -f "$f" ]] || continue
+        # une entrée « efi » charge un binaire EFI (memtest) : pas de noyau,
+        # pas d'options — elle n'a rien à prouver ici.
+        grep -qE '^[[:blank:]]*efi[[:blank:]]' "$f" && continue
+        grep -qE '^[[:blank:]]*linux[[:blank:]]' "$f" || continue
+        if ! grep -qE '^options .*console=tty0' "$f"; then
+            echo "  ✗ UEFI $(basename "$f") : pas de console=tty0 (écran VGA noir)"; fail=1
+        fi
+        if ! grep -qE '^options .*systemd\.mask=systemd-firstboot\.service' "$f"; then
+            echo "  ✗ UEFI $(basename "$f") : firstboot non masqué (le boot bloque)"; fail=1
+        fi
+    done
+    _nuefi=$(grep -lE '^options .*console=tty0 .*systemd\.mask=systemd-firstboot\.service' \
+                  iso/efiboot/loader/entries/*.conf 2>/dev/null | wc -l)
+    if [[ "$_nuefi" -gt 0 ]]; then
+        echo "  ✓ UEFI : $_nuefi entrée(s) conformes"
+    else
+        echo "  ✗ UEFI : aucune entrée conforme"; fail=1
+    fi
+
     echo "[check] profil : exécutables airootfs épinglés dans profiledef.sh ?"
     while IFS= read -r f; do
         rel="/${f#iso/airootfs/}"
