@@ -104,17 +104,13 @@ totalité des cas, le problème est la machine virtuelle, pas le PC :
 
 ### Le menu s'affiche mais l'écran reste noir
 
-Le live démarre sur l'écran **et** sur un port série (`console=tty0
-console=ttyS0,115200`). Le port série est utile pour voir ce qui bloque, machine
-sans écran comprise :
+Le live démarre sur l'écran VGA uniquement (`console=tty0`) : **pas de console
+série**. Ajouter `console=ttyS0,115200` fait apparaître à l'écran
+`bobos login:` à la place du bureau, parce que `/dev/console` désigne la
+dernière console de la ligne de commande et que systemd y ouvre un
+`serial-getty`. Un contrôle de build interdit son retour.
 
-```
-qemu-system-x86_64 -m 4096 -enable-kvm \
-  -cdrom out/bobos-*.iso -nographic
-```
-
-Tout le journal du boot apparaît alors dans le terminal. Deux causes historiques
-de « écran noir après le menu », toutes deux corrigées et désormais vérifiées par
+Deux autres causes de « écran noir après le menu », corrigées et vérifiées par
 un contrôle de build :
 
 - **`console=` sans `console=tty0`** : la dernière console de la ligne de

@@ -320,6 +320,17 @@ PY
     else
         echo "  ✗ UEFI : aucune entrée conforme"; fail=1
     fi
+    # Pas de console série : avec « console=ttyS0 », /dev/console désigne la
+    # dernière console de la ligne de commande et systemd ouvre un serial-getty
+    # — l'utilisateur voit « bobos login: » à la place du bureau (constaté
+    # dans une VM QEMU).
+    if grep -qE 'console=ttyS[0-9]' iso/syslinux/archiso_sys-linux.cfg iso/efiboot/loader/entries/*.conf 2>/dev/null; then
+        echo "  ✗ console série dans une entrée de boot : son invite de connexion masque le bureau"
+        grep -nE 'console=ttyS[0-9]' iso/syslinux/archiso_sys-linux.cfg iso/efiboot/loader/entries/*.conf | sed 's/^/      /'
+        fail=1
+    else
+        echo "  ✓ pas de console série (l'écran garde le bureau)"
+    fi
 
     echo "[check] config d'initramfs du live : rien ne doit survivre sur la cible"
     # Un drop-in dans /etc/mkinitcpio.conf.d/ est une configuration du LIVE
